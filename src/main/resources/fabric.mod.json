@@ -1,37 +1,32 @@
 {
   "schemaVersion": 1,
-  "id": "modid",
+  "id": "insta-reset",
   "version": "${version}",
 
-  "name": "Example Mod",
-  "description": "This is an example description! Tell everyone what your mod is about!",
+  "name": "InstaReset",
+  "description": "Minecraft: Java Edition Speedrunning mod for really fast single instance resetting.",
   "authors": [
-    "Me!"
+    "Relacibo"
   ],
   "contact": {
     "homepage": "https://fabricmc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "sources": "https://github.com/Relacibo/insta-reset"
   },
 
-  "license": "CC0-1.0",
-  "icon": "assets/modid/icon.png",
-
+  "license": "MIT",
+  "icon": "assets/insta-reset/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
-      "net.fabricmc.example.ExampleMod"
+      "de.rcbnetwork.insta_reset.InstaReset"
     ]
   },
   "mixins": [
-    "modid.mixins.json"
+    "insta-reset.mixins.json"
   ],
 
   "depends": {
     "fabricloader": ">=0.7.4",
-    "fabric": "*",
-    "minecraft": "1.16.x"
-  },
-  "suggests": {
-    "another-mod": "*"
+    "minecraft": "1.16.1"
   }
 }
