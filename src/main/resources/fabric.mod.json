@@ -17,7 +17,7 @@
   "icon": "assets/insta-reset/icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": [
+    "client": [
       "de.rcbnetwork.insta_reset.InstaReset"
     ]
   },
