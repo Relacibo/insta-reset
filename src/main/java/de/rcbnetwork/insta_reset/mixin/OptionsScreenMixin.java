@@ -6,7 +6,6 @@ import net.minecraft.client.gui.screen.options.OptionsScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
-import net.minecraft.util.Language;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -20,14 +19,15 @@ public class OptionsScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("TAIL"))
     private void addStopRunButtonMixin(CallbackInfo info) {
-        if (InstaReset.instance().isModActive()) {
-            Text text = new LiteralText("Stop Resets & Quit");
-
-            //Add button to disable the auto reset and quit
-            this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, text, (buttonWidget) -> {
-                InstaReset.instance().stop();
-                buttonWidget.active = false;
-            }));
+        if (!InstaReset.instance().isModRunning()) {
+            return;
         }
+        Text text = new LiteralText("Stop Resets & Quit");
+
+        //Add button to disable the auto reset and quit
+        this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, text, (buttonWidget) -> {
+            InstaReset.instance().stop();
+            buttonWidget.active = false;
+        }));
     }
 }

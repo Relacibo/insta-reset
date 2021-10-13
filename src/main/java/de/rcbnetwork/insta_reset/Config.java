@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.util.Util;
 import net.minecraft.world.Difficulty;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -21,6 +22,8 @@ public class Config {
     private Path configPath;
     private static final Logger LOGGER = LogManager.getLogger();
 
+
+
     public final Settings settings = new Settings();
 
     public String getFileName() {
@@ -30,6 +33,7 @@ public class Config {
     public static class Settings {
         public Difficulty difficulty = Difficulty.EASY;
         public int resetCounter = 0;
+        public int numberOfConcurrentLevels = 2;
     }
 
     private static final Gson GSON = new GsonBuilder()
@@ -67,6 +71,10 @@ public class Config {
         if (this.settings.difficulty == null) {
             this.settings.difficulty = Difficulty.EASY;
         }
+        if (this.settings.numberOfConcurrentLevels < 1) {
+            this.settings.numberOfConcurrentLevels = 1;
+        }
+
     }
 
     public void writeChanges() throws IOException {

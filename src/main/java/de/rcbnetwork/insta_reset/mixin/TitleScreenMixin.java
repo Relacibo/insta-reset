@@ -21,13 +21,16 @@ public class TitleScreenMixin extends Screen {
             return;
         }
         InstaReset instaReset = InstaReset.instance();
-        if (instaReset.isModActive()) {
-            InstaReset.instance().createLevel();
+        if (instaReset.isModRunning()) {
+            instaReset.openNextLevel();
+            return;
         }
         // Add new button for starting auto resets.
+        int x = this.width / 2 - 124;
         int y = this.height / 4 + 48;
-        this.addButton(new ButtonWidget(this.width / 2 - 124, y, 20, 20, LiteralText.EMPTY, (buttonWidget) -> {
-            InstaReset.instance().createLevel();
+        this.addButton(new ButtonWidget(x, y, 20, 20, LiteralText.EMPTY, (buttonWidget) -> {
+            instaReset.start();
+            instaReset.openNextLevel();
         }));
     }
 }

@@ -1,41 +1,37 @@
 package de.rcbnetwork.insta_reset;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.hash.Hashing;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.RunArgs;
 import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.client.gui.screen.TitleScreen;
-import net.minecraft.client.gui.screen.world.CreateWorldScreen;
-import net.minecraft.client.toast.SystemToast;
 import net.minecraft.resource.DataPackSettings;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.TranslatableText;
 import net.minecraft.util.FileNameUtil;
-import net.minecraft.util.WorldSavePath;
+import net.minecraft.util.registry.RegistryKey;
 import net.minecraft.util.registry.RegistryTracker;
-import net.minecraft.world.Difficulty;
-import net.minecraft.world.GameMode;
-import net.minecraft.world.GameRules;
-import net.minecraft.world.gen.GeneratorOptions;
+import net.minecraft.util.registry.SimpleRegistry;
+import net.minecraft.village.ZombieSiegeManager;
+import net.minecraft.world.*;
+import net.minecraft.world.biome.source.BiomeAccess;
+import net.minecraft.world.dimension.DimensionOptions;
+import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.gen.*;
+import net.minecraft.world.gen.chunk.ChunkGenerator;
 import net.minecraft.world.level.LevelInfo;
-import net.minecraft.world.level.storage.LevelStorage;
-import net.fabricmc.loader.api.FabricLoader;
 
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Comparator;
-import java.util.OptionalLong;
-import java.util.stream.Stream;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
+import net.minecraft.world.level.ServerWorldProperties;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.lwjgl.system.CallbackI;
 
 public class InstaReset implements ClientModInitializer {
 	private static InstaReset _instance;
@@ -46,14 +42,32 @@ public class InstaReset implements ClientModInitializer {
 	private Logger logger = LogManager.getLogger();
 	private Config config;
 	private MinecraftClient client;
-	private boolean modActive = false;
+	private boolean modRunning = false;
+	private Queue<PregeneratingPartialLevel> pregeneratingLevelQueue = new LinkedList<>();
+	private AtomicReference<PregeneratingPartialLevel> currentLevel;
 
-	public boolean isModActive() {
-		return this.modActive;
+	public PregeneratingPartialLevel getCurrentLevel() {
+		return this.currentLevel.get();
+	}
+
+	public boolean isModRunning() {
+		return this.modRunning;
+	}
+
+	private PregeneratingPartialLevel pollFromPregeneratingLevelQueue() {
+		this.pregeneratingLevelQueue.offer(createPregeneratingPartialLevel());
+		return pregeneratingLevelQueue.poll();
+	}
+
+	public void start() {
+		this.modRunning = true;
+		for (int i = 0; i < this.config.settings.numberOfConcurrentLevels; i++) {
+			this.pregeneratingLevelQueue.offer(createPregeneratingPartialLevel());
+		}
 	}
 
 	public void stop() {
-		this.modActive = false;
+		this.modRunning = false;
 		this.client.world.disconnect();
 		this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
 		this.client.openScreen(new TitleScreen());
@@ -66,26 +80,61 @@ public class InstaReset implements ClientModInitializer {
 		InstaReset._instance = this;
 	}
 
-	/***
-	 * Modified version of CreateWorldScreen.java:245
-	 */
-	public void createLevel() {
+	public void openNextLevel() {
+		PregeneratingPartialLevel level = this.pollFromPregeneratingLevelQueue();
+		this.currentLevel.set(level);
+		String fileName = level.fileName;
+		LevelInfo levelInfo = level.levelInfo;
+		GeneratorOptions generatorOptions = level.generatorOptions;
+		this.client.method_29607(fileName, levelInfo, RegistryTracker.create(), generatorOptions);
+	}
+
+	public PregeneratingPartialLevel createPregeneratingPartialLevel() {
+		// createLevel() (CreateWorldScreen.java:245)
 		String levelName = this.generateLevelName();
-		String fileName = this.generateFileName(levelName);
 		// this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
 		// At this point in the original code datapacks are copied into the world folder. (CreateWorldScreen.java:247)
 
 		// Shorter version of original code (MoreOptionsDialog.java:80 & MoreOptionsDialog.java:302)
 		GeneratorOptions generatorOptions = GeneratorOptions.getDefaultOptions().withHardcore(false, OptionalLong.empty());
 		LevelInfo levelInfo = new LevelInfo(levelName, GameMode.SURVIVAL, false, this.config.settings.difficulty, false, new GameRules(), DataPackSettings.SAFE_MODE);
-		this.modActive = true;
 		this.config.settings.resetCounter++;
 		try {
 			config.writeChanges();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		this.client.method_29607(fileName, levelInfo, RegistryTracker.create(), generatorOptions);
+		String seedHash = Hashing.sha256().hashString(String.valueOf(generatorOptions.getSeed()), StandardCharsets.UTF_8).toString();
+		String fileName = this.generateFileName(levelName, seedHash);
+		return startLevelPregeneration(fileName, levelInfo, generatorOptions);
+	}
+
+	private PregeneratingPartialLevel startLevelPregeneration(String fileName, LevelInfo levelInfo, GeneratorOptions generatorOptions) {
+		ServerWorldProperties serverWorldProperties = this.saveProperties.getMainWorldProperties();
+		boolean bl = generatorOptions.isDebugWorld();
+		long l = generatorOptions.getSeed();
+		long m = BiomeAccess.hashSeed(l);
+		List<Spawner> list = ImmutableList.of(new PhantomSpawner(), new PillagerSpawner(), new CatSpawner(), new ZombieSiegeManager(), new WanderingTraderManager(serverWorldProperties));
+		SimpleRegistry<DimensionOptions> simpleRegistry = generatorOptions.getDimensionMap();
+		DimensionOptions dimensionOptions = (DimensionOptions)simpleRegistry.get(DimensionOptions.OVERWORLD);
+		Object chunkGenerator2;
+		DimensionType dimensionType2;
+		if (dimensionOptions == null) {
+			dimensionType2 = DimensionType.getOverworldDimensionType();
+			chunkGenerator2 = GeneratorOptions.createOverworldGenerator((new Random()).nextLong());
+		} else {
+			dimensionType2 = dimensionOptions.getDimensionType();
+			chunkGenerator2 = dimensionOptions.getChunkGenerator();
+		}
+
+		RegistryKey<DimensionType> registryKey = (RegistryKey)this.dimensionTracker.getDimensionTypeRegistry().getKey(dimensionType2).orElseThrow(() -> {
+			return new IllegalStateException("Unregistered dimension type: " + dimensionType2);
+		});
+		ServerWorld serverWorld = new ServerWorld(this, this.workerExecutor, this.session, serverWorldProperties, World.OVERWORLD, registryKey, dimensionType2, worldGenerationProgressListener, (ChunkGenerator)chunkGenerator2, bl, m, list, true);
+		Thread pregenerationThread = new Thread(() -> {
+
+		});
+		return new PregeneratingPartialLevel(fileName, levelInfo, generatorOptions, pregenerationThread, );
 	}
 
 	private String generateLevelName() {
@@ -93,7 +142,7 @@ public class InstaReset implements ClientModInitializer {
 		return levelName;
 	}
 
-	private String generateFileName(String levelName) {
+	private String generateFileName(String levelName, String seedHash) {
 		String fileName;
 		// Ensure its a unique name (CreateWorldScreen.java:222)
 		try {
@@ -105,7 +154,7 @@ public class InstaReset implements ClientModInitializer {
 				throw new RuntimeException("Could not create save folder", var3);
 			}
 		}
-		return fileName;
+		return String.format("%s - %s", fileName, seedHash);
 	}
 
 	@Environment(EnvType.CLIENT)
