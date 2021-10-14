@@ -68,9 +68,7 @@ public class InstaReset implements ClientModInitializer {
 
 	public void stop() {
 		this.modRunning = false;
-		this.client.world.disconnect();
-		this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
-		this.client.openScreen(new TitleScreen());
+		// TODO: Unintialize logic
 	}
 
 	@Override

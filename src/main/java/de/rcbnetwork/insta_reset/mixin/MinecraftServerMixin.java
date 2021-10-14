@@ -84,7 +84,7 @@ public abstract class MinecraftServerMixin implements MinecraftServerCustomInter
             try {
                 InstaReset.instance().getCurrentLevel().serverThread.join();
             } catch (InterruptedException e) {
-                LOGGER.error(e.getCause());
+                LOGGER.error(e);
             }
             ((MinecraftServerCustomInterface)atomicReference.get()).runServer();
         }, "Server thread");
