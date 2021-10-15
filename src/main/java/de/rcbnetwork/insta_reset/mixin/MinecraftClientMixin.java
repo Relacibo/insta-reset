@@ -6,6 +6,7 @@ import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import com.mojang.datafixers.util.Function4;
 import com.mojang.serialization.Lifecycle;
 import de.rcbnetwork.insta_reset.InstaReset;
+import de.rcbnetwork.insta_reset.Pregenerator;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
@@ -31,6 +32,7 @@ import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.world.SaveProperties;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -49,38 +51,14 @@ public class MinecraftClientMixin {
         if (!InstaReset.instance().isModRunning()) {
             return;
         }
-        LevelStorage.Session session2;
-        try {
-            session2 = this.levelStorage.createSession(worldName);
-        } catch (IOException var21) {
-            LOGGER.warn((String)"Failed to read level {} data", (Object)worldName, (Object)var21);
-            SystemToast.addWorldAccessFailureToast(this, worldName);
-            this.openScreen((Screen)null);
-            return;
-        }
-
-        MinecraftClient.IntegratedResourceManager integratedResourceManager2;
-        try {
-            integratedResourceManager2 = this.method_29604(registryTracker, function, function4, safeMode, session2);
-        } catch (Exception var20) {
-            LOGGER.warn((String)"Failed to load datapacks, can't proceed with server load", (Throwable)var20);
-            this.openScreen(new DatapackFailureScreen(() -> {
-                this.startIntegratedServer(worldName, registryTracker, function, function4, true, worldLoadAction);
-            }));
-
-            try {
-                session2.close();
-            } catch (IOException var16) {
-                LOGGER.warn((String)"Failed to unlock access to level {}", (Object)worldName, (Object)var16);
-            }
-
-            return;
-        }
+        Pregenerator.PregeneratingPartialLevel currentLevel = InstaReset.instance().getCurrentLevel();
+        LevelStorage.Session session2 = currentLevel.session;
+        MinecraftClient.IntegratedResourceManager integratedResourceManager2 = currentLevel.integratedResourceManager;
 
         SaveProperties saveProperties = integratedResourceManager2.getSaveProperties();
         boolean bl = saveProperties.getGeneratorOptions().isLegacyCustomizedType();
         boolean bl2 = saveProperties.method_29588() != Lifecycle.stable();
-        if (worldLoadAction == MinecraftClient.WorldLoadAction.NONE || !bl && !bl2) {
+        if (worldLoadAction == WorldLoadAction.NONE || !bl && !bl2) {
             this.disconnect();
             this.worldGenProgressTracker.set((Object)null);
 

@@ -2,7 +2,7 @@ package de.rcbnetwork.insta_reset.mixin;
 
 import com.google.common.collect.ImmutableList;
 import de.rcbnetwork.insta_reset.InstaReset;
-import de.rcbnetwork.insta_reset.PregeneratingPartialLevel;
+import de.rcbnetwork.insta_reset.Pregenerator;
 import de.rcbnetwork.insta_reset.interfaces.MinecraftServerCustomInterface;
 import net.minecraft.command.DataCommandStorage;
 import net.minecraft.entity.boss.BossBarManager;
@@ -20,14 +20,12 @@ import net.minecraft.world.World;
 import net.minecraft.world.border.WorldBorderListener;
 import net.minecraft.world.dimension.DimensionOptions;
 import net.minecraft.world.dimension.DimensionType;
-import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.gen.chunk.ChunkGenerator;
 import net.minecraft.world.level.UnmodifiableLevelProperties;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.apache.logging.log4j.Logger;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -102,7 +100,7 @@ public abstract class MinecraftServerMixin implements MinecraftServerCustomInter
         if (!InstaReset.instance().isModRunning()) {
             return;
         }
-        PregeneratingPartialLevel partialLevel = InstaReset.instance().getCurrentLevel();
+        Pregenerator.PregeneratingPartialLevel partialLevel = InstaReset.instance().getCurrentLevel();
         ServerWorld serverWorld = partialLevel.serverWorld;
         SimpleRegistry<DimensionOptions> simpleRegistry = partialLevel.simpleRegistry;
         // MinecraftServer.java:346
