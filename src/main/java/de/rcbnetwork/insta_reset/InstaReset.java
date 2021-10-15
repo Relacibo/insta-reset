@@ -138,36 +138,6 @@ public class InstaReset implements ClientModInitializer {
 		return new Pregenerator(client, fileName, generatorOptions, registryTracker).pregenerate(levelInfo);
 	}
 
-	private Pregenerator.PregeneratingPartialLevel startLevelPregeneration(String fileName, LevelInfo levelInfo, GeneratorOptions generatorOptions) {
-		// MinecraftServer.java:323
-		ServerWorldProperties serverWorldProperties = this.saveProperties.getMainWorldProperties();
-		boolean bl = generatorOptions.isDebugWorld();
-		long l = generatorOptions.getSeed();
-		long m = BiomeAccess.hashSeed(l);
-		List<Spawner> list = ImmutableList.of(new PhantomSpawner(), new PillagerSpawner(), new CatSpawner(), new ZombieSiegeManager(), new WanderingTraderManager(serverWorldProperties));
-		SimpleRegistry<DimensionOptions> simpleRegistry = generatorOptions.getDimensionMap();
-		DimensionOptions dimensionOptions = (DimensionOptions)simpleRegistry.get(DimensionOptions.OVERWORLD);
-		Object chunkGenerator2;
-		DimensionType dimensionType2;
-		if (dimensionOptions == null) {
-			dimensionType2 = DimensionType.getOverworldDimensionType();
-			chunkGenerator2 = GeneratorOptions.createOverworldGenerator((new Random()).nextLong());
-		} else {
-			dimensionType2 = dimensionOptions.getDimensionType();
-			chunkGenerator2 = dimensionOptions.getChunkGenerator();
-		}
-
-		RegistryKey<DimensionType> registryKey = (RegistryKey)this.dimensionTracker.getDimensionTypeRegistry().getKey(dimensionType2).orElseThrow(() -> {
-			return new IllegalStateException("Unregistered dimension type: " + dimensionType2);
-		});
-		ServerWorld serverWorld = new ServerWorld(this, this.workerExecutor, this.session, serverWorldProperties, World.OVERWORLD, registryKey, dimensionType2, worldGenerationProgressListener, (ChunkGenerator)chunkGenerator2, bl, m, list, true);
-		Thread pregenerationThread = new Thread(() -> {
-
-		});
-		//return new Pregenerator.PregeneratingPartialLevel(fileName, levelInfo, generatorOptions, pregenerationThread, );
-
-	}
-
 	private String generateLevelName() {
 		String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter);
 		return levelName;
