@@ -4,11 +4,11 @@
   "package": "de.rcbnetwork.insta_reset.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "MinecraftServerMixin"
   ],
   "client": [
     "TitleScreenMixin",
-    "OptionsScreenMixin"
+    "OptionsScreenMixin",
+    "MinecraftClientMixin"
   ],
   "injectors": {
     "defaultRequire": 1

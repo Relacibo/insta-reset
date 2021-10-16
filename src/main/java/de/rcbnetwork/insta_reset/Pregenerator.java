@@ -1,6 +1,6 @@
 package de.rcbnetwork.insta_reset;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Queues;
 import com.google.gson.JsonElement;
 import com.mojang.authlib.GameProfileRepository;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
@@ -11,72 +11,39 @@ import com.mojang.serialization.JsonOps;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
-import net.minecraft.client.gui.screen.LevelLoadingScreen;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.network.ClientLoginNetworkHandler;
 import net.minecraft.client.toast.SystemToast;
-import net.minecraft.network.ClientConnection;
-import net.minecraft.network.NetworkState;
-import net.minecraft.network.packet.c2s.handshake.HandshakeC2SPacket;
-import net.minecraft.network.packet.c2s.login.LoginHelloC2SPacket;
 import net.minecraft.resource.DataPackSettings;
 import net.minecraft.resource.ResourceManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.QueueingWorldGenerationProgressListener;
-import net.minecraft.server.WorldGenerationProgressListener;
 import net.minecraft.server.integrated.IntegratedServer;
-import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.UserCache;
-import net.minecraft.util.crash.CrashException;
-import net.minecraft.util.crash.CrashReport;
-import net.minecraft.util.crash.CrashReportSection;
 import net.minecraft.util.dynamic.RegistryOps;
 import net.minecraft.util.registry.Registry;
-import net.minecraft.util.registry.RegistryKey;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.util.registry.SimpleRegistry;
-import net.minecraft.village.ZombieSiegeManager;
 import net.minecraft.world.SaveProperties;
-import net.minecraft.world.WanderingTraderManager;
-import net.minecraft.world.World;
-import net.minecraft.world.biome.source.BiomeAccess;
 import net.minecraft.world.dimension.DimensionOptions;
-import net.minecraft.world.dimension.DimensionType;
 import net.minecraft.world.gen.*;
-import net.minecraft.world.gen.chunk.ChunkGenerator;
 import net.minecraft.world.level.LevelInfo;
 import net.minecraft.world.level.LevelProperties;
-import net.minecraft.world.level.ServerWorldProperties;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.SocketAddress;
-import java.util.List;
 import java.util.Queue;
-import java.util.Random;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.UUID;
 
 public class Pregenerator {
 
     private static final Logger LOGGER = LogManager.getLogger();
-    MinecraftClient client;
-    private String fileName;
-    private GeneratorOptions generatorOptions;
-    private RegistryTracker.Modifiable registryTracker;
 
-    public Pregenerator(MinecraftClient client, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker) {
-        this.client = client;
-        this.fileName = fileName;
-        this.generatorOptions = generatorOptions;
-        this.registryTracker = registryTracker;
-    }
-
-    public PregeneratingPartialLevel pregenerate(LevelInfo levelInfo) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingPartialLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo) throws IOException, ExecutionException, InterruptedException {
         // method_29605 (MinecraftClient.java:1645) + startIntegratedServer (MinecraftClient.java:1658)
         Function<LevelStorage.Session, DataPackSettings> function = (session) -> {
             return levelInfo.method_29558();
@@ -93,26 +60,26 @@ public class Pregenerator {
         //MinecraftClient.WorldLoadAction worldLoadAction = MinecraftClient.WorldLoadAction.CREATE;
 
         // startIntegratedServer (MinecraftClient.java:1658)
-        LevelStorage levelStorage = this.client.getLevelStorage();
+        LevelStorage levelStorage = client.getLevelStorage();
         LevelStorage.Session session2;
         try {
             // fileName == worldName (CreateWorldScreen.java:221)
-            session2 = levelStorage.createSession(this.fileName);
+            session2 = levelStorage.createSession(fileName);
         } catch (IOException var21) {
-            LOGGER.warn((String)"Failed to read level {} data", (Object)this.fileName, (Object)var21);
-            SystemToast.addWorldAccessFailureToast(this.client, this.fileName);
+            LOGGER.warn((String)"Failed to read level {} data", (Object)fileName, (Object)var21);
+            SystemToast.addWorldAccessFailureToast(client, fileName);
             throw var21;
         }
 
         MinecraftClient.IntegratedResourceManager integratedResourceManager2;
         try {
             // Maybe doesn't work!!
-            integratedResourceManager2 = this.client.method_29604(registryTracker, function, function4, safeMode, session2);
+            integratedResourceManager2 = client.method_29604(registryTracker, function, function4, safeMode, session2);
         } catch (Exception var20) {
             try {
                 session2.close();
             } catch (IOException var16) {
-                LOGGER.warn((String)"Failed to unlock access to level {}", (Object)this.fileName, (Object)var16);
+                LOGGER.warn((String)"Failed to unlock access to level {}", (Object)fileName, (Object)var16);
             } finally {
                 throw var20;
             }
@@ -127,75 +94,67 @@ public class Pregenerator {
         // MinecraftClient.java:1691
         session2.method_27425(registryTracker, saveProperties);
         integratedResourceManager2.getServerResourceManager().loadRegistryTags();
-        YggdrasilAuthenticationService yggdrasilAuthenticationService = new YggdrasilAuthenticationService(this.netProxy, UUID.randomUUID().toString());
+        YggdrasilAuthenticationService yggdrasilAuthenticationService = new YggdrasilAuthenticationService(client.getNetworkProxy(), UUID.randomUUID().toString());
         MinecraftSessionService minecraftSessionService = yggdrasilAuthenticationService.createMinecraftSessionService();
         GameProfileRepository gameProfileRepository = yggdrasilAuthenticationService.createProfileRepository();
         UserCache userCache = new UserCache(gameProfileRepository, new File(client.runDirectory, MinecraftServer.USER_CACHE_FILE.getName()));
         SkullBlockEntity.setUserCache(userCache);
         SkullBlockEntity.setSessionService(minecraftSessionService);
-        UserCache.setUseRemote(false);
+        //UserCache.setUseRemote(false);
 
         // loadWorld (MinecraftServer.java:314)
-        WorldGenerationProgressTracker worldGenerationProgressTracker = new WorldGenerationProgressTracker(11);
-        worldGenerationProgressTracker.start();
-
-        // createWorlds (MinecraftServer.java:323)
-        ServerWorldProperties serverWorldProperties = saveProperties.getMainWorldProperties();
-        boolean bl = generatorOptions.isDebugWorld();
-        long l = generatorOptions.getSeed();
-        long m = BiomeAccess.hashSeed(l);
-        List<Spawner> list = ImmutableList.of(new PhantomSpawner(), new PillagerSpawner(), new CatSpawner(), new ZombieSiegeManager(), new WanderingTraderManager(serverWorldProperties));
-        SimpleRegistry<DimensionOptions> simpleRegistry = generatorOptions.getDimensionMap();
-        DimensionOptions dimensionOptions = (DimensionOptions)simpleRegistry.get(DimensionOptions.OVERWORLD);
-        Object chunkGenerator2;
-        DimensionType dimensionType2;
-        if (dimensionOptions == null) {
-            dimensionType2 = DimensionType.getOverworldDimensionType();
-            chunkGenerator2 = GeneratorOptions.createOverworldGenerator((new Random()).nextLong());
-        } else {
-            dimensionType2 = dimensionOptions.getDimensionType();
-            chunkGenerator2 = dimensionOptions.getChunkGenerator();
-        }
-
-        RegistryKey<DimensionType> registryKey = (RegistryKey)this.dimensionTracker.getDimensionTypeRegistry().getKey(dimensionType2).orElseThrow(() -> {
-            return new IllegalStateException("Unregistered dimension type: " + dimensionType2);
+        final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker = new AtomicReference<>();
+        final AtomicReference<Queue> renderTaskQueue = new AtomicReference<>();
+        IntegratedServer server = (IntegratedServer)MinecraftServer.startServer((serverThread) -> {
+            return new IntegratedServer(serverThread, client, registryTracker, session2, integratedResourceManager2.getResourcePackManager(), integratedResourceManager2.getServerResourceManager(), saveProperties, minecraftSessionService, gameProfileRepository, userCache, (i) -> {
+                WorldGenerationProgressTracker wgpt = new WorldGenerationProgressTracker(i + 0);
+                worldGenerationProgressTracker.set(wgpt);
+                wgpt.start();
+                // MinecraftClient.java:351
+                Queue rtg = Queues.newConcurrentLinkedQueue();
+                renderTaskQueue.set(rtg);
+                rtg.getClass();
+                return new QueueingWorldGenerationProgressListener(wgpt, rtg::add);
+            });
         });
-        ServerWorld serverWorld = new ServerWorld(this, this.workerExecutor, this.session, serverWorldProperties, World.OVERWORLD, registryKey, dimensionType2, worldGenerationProgressListener, (ChunkGenerator)chunkGenerator2, bl, m, list, true);
-        Thread pregenerationThread = new Thread(() -> {
-
-        });
+        return new PregeneratingPartialLevel(hash, fileName, levelInfo, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
-    public final class PregeneratingPartialLevel {
+    public static final class PregeneratingPartialLevel {
 
+        private String hash;
         public final String fileName;
 
         public final LevelInfo levelInfo;
 
         public final GeneratorOptions generatorOptions;
 
-        public final Thread serverThread;
-
-        public final ServerWorld serverWorld;
-
-        public final SimpleRegistry<DimensionOptions> simpleRegistry;
-
         public final MinecraftClient.IntegratedResourceManager integratedResourceManager;
 
         public final LevelStorage.Session session;
 
-        public final WorldGenerationProgressTracker worldGenerationProgressTracker;
+        public final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker;
 
-        public PregeneratingPartialLevel(String fileName, LevelInfo levelInfo, GeneratorOptions generatorOptions, Thread serverThread, ServerWorld serverWorld, SimpleRegistry<DimensionOptions> simpleRegistry, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, WorldGenerationProgressTracker worldGenerationProgressTracker) {
+        public final IntegratedServer server;
+
+        public final AtomicReference<Queue> renderTaskQueue;
+
+        public final MinecraftSessionService minecraftSessionService;
+
+        public final UserCache userCache;
+
+        public PregeneratingPartialLevel(String hash, String fileName, LevelInfo levelInfo, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+            this.hash = hash;
             this.fileName = fileName;
             this.levelInfo = levelInfo;
             this.generatorOptions = generatorOptions;
-            this.serverThread = serverThread;
-            this.serverWorld = serverWorld;
-            this.simpleRegistry = simpleRegistry;
             this.integratedResourceManager = integratedResourceManager;
             this.session = session;
             this.worldGenerationProgressTracker = worldGenerationProgressTracker;
+            this.server = server;
+            this.renderTaskQueue = renderTaskQueue;
+            this.minecraftSessionService = minecraftSessionService;
+            this.userCache = userCache;
         }
     }
 }

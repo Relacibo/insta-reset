@@ -84,3 +84,7 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+loom {
+	accessWidener = file("src/main/resources/insta-reset.accesswidener")
+}

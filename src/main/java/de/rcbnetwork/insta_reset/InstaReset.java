@@ -24,6 +24,7 @@ import net.minecraft.world.level.LevelInfo;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import net.minecraft.world.level.ServerWorldProperties;
@@ -41,7 +42,7 @@ public class InstaReset implements ClientModInitializer {
 	private MinecraftClient client;
 	private boolean modRunning = false;
 	private Queue<Pregenerator.PregeneratingPartialLevel> pregeneratingLevelQueue = new LinkedList<>();
-	private AtomicReference<Pregenerator.PregeneratingPartialLevel> currentLevel;
+	private AtomicReference<Pregenerator.PregeneratingPartialLevel> currentLevel = new AtomicReference<>();
 
 	public Pregenerator.PregeneratingPartialLevel getCurrentLevel() {
 		return this.currentLevel.get();
@@ -79,8 +80,25 @@ public class InstaReset implements ClientModInitializer {
 		this.modRunning = false;
 		Pregenerator.PregeneratingPartialLevel level = pregeneratingLevelQueue.poll();
 		while (level != null) {
-			// TODO: Unintialize logic
+			stopLevel(level);
 			level = pregeneratingLevelQueue.poll();
+		}
+		level = currentLevel.get();
+		if (level != null) {
+			stopLevel(currentLevel.get());
+		}
+		currentLevel.set(null);
+	}
+
+	private void stopLevel(Pregenerator.PregeneratingPartialLevel level) {
+		level.server.stop(true);
+		level.renderTaskQueue.set(null);
+		level.worldGenerationProgressTracker.set(null);
+		level.integratedResourceManager.close();
+		try {
+			level.session.close();
+		} catch (IOException e) {
+			logger.error("InstaReset - Cannot close Session");
 		}
 	}
 
@@ -116,7 +134,7 @@ public class InstaReset implements ClientModInitializer {
 		}
 	}
 
-	public Pregenerator.PregeneratingPartialLevel createPregeneratingPartialLevel() throws IOException {
+	public Pregenerator.PregeneratingPartialLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
 		// createLevel() (CreateWorldScreen.java:245)
 		String levelName = this.generateLevelName();
 		// this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
@@ -135,7 +153,7 @@ public class InstaReset implements ClientModInitializer {
 		String fileName = this.generateFileName(levelName, seedHash);
 		// MoreOptionsDialog:79+326
 		RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
-		return new Pregenerator(client, fileName, generatorOptions, registryTracker).pregenerate(levelInfo);
+		return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo);
 	}
 
 	private String generateLevelName() {
