@@ -1,4 +1,4 @@
-package de.rcbnetwork.insta_reset.mixin;
+package de.rcbnetwork.insta_reset.mixin.client;
 
 import de.rcbnetwork.insta_reset.InstaReset;
 import net.minecraft.client.gui.screen.SaveLevelScreen;

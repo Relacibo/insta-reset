@@ -1,4 +1,4 @@
-package de.rcbnetwork.insta_reset.mixin;
+package de.rcbnetwork.insta_reset.mixin.client;
 
 import com.google.gson.JsonElement;
 import com.mojang.authlib.GameProfileRepository;
@@ -10,6 +10,7 @@ import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.Lifecycle;
 import de.rcbnetwork.insta_reset.InstaReset;
 import de.rcbnetwork.insta_reset.Pregenerator;
+import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
@@ -197,5 +198,16 @@ public class MinecraftClientMixin {
 
         }
         info.cancel();
+    }
+
+    // From Fast-Reset-Mod
+    @Inject(method = "method_29607", at=@At("HEAD"))
+    public void worldWait(String worldName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, CallbackInfo ci){
+        if (this.server != null && ((FlushableServer)this.server).shouldFlush()) {
+            synchronized(((FlushableServer)this.server).getFlushLock()){
+                System.out.println("done waiting for save lock");
+            }
+        }
+
     }
 }

@@ -8,9 +8,11 @@ import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import com.mojang.datafixers.util.Function4;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
+import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
+import net.minecraft.client.gui.screen.world.WorldListWidget;
 import net.minecraft.client.toast.SystemToast;
 import net.minecraft.resource.DataPackSettings;
 import net.minecraft.resource.ResourceManager;
@@ -125,16 +127,45 @@ public class Pregenerator {
                 return new QueueingWorldGenerationProgressListener(wgpt, rtg::add);
             });
         });
+        // Fast-Reset: don't save when closing the server.
+        ((FlushableServer)(server)).setShouldFlush(true);
         return new PregeneratingPartialLevel(hash, fileName, levelInfo, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
-    public static void uninitialize(Pregenerator.PregeneratingPartialLevel level) throws IOException {
+    public static void uninitialize(MinecraftClient client, Pregenerator.PregeneratingPartialLevel level) throws IOException {
         level.server.stop(true);
         level.renderTaskQueue.set(null);
         level.worldGenerationProgressTracker.set(null);
         level.integratedResourceManager.close();
-        level.session.close();
-        FileUtils.deleteDirectory(Paths.get(level.fileName).toFile());
+        // WorldListWidget.java:323
+        LevelStorage levelStorage = client.getLevelStorage();
+        try {
+            LevelStorage.Session session = levelStorage.createSession(level.fileName);
+            Throwable var5 = null;
+
+            try {
+                session.deleteSessionLock();
+            } catch (Throwable var15) {
+                var5 = var15;
+                throw var15;
+            } finally {
+                if (session != null) {
+                    if (var5 != null) {
+                        try {
+                            session.close();
+                        } catch (Throwable var14) {
+                            var5.addSuppressed(var14);
+                        }
+                    } else {
+                        session.close();
+                    }
+                }
+
+            }
+        } catch (IOException var17) {
+            SystemToast.addWorldDeleteFailureToast(client, level.fileName);
+            LOGGER.error((String)"Failed to delete world {}", (Object)level.fileName, (Object)var17);
+        }
     }
 
     public static final class PregeneratingPartialLevel {

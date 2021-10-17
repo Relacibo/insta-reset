@@ -1,6 +1,7 @@
 package de.rcbnetwork.insta_reset;
 
 import com.google.common.hash.Hashing;
+import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -129,6 +130,10 @@ public class InstaReset implements ClientModInitializer {
 			}
 			this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
 		}
+		Pregenerator.PregeneratingPartialLevel level = this.currentLevel.get();
+		if (level != null) {
+			((FlushableServer)(level.server)).setShouldFlush(true);
+		}
 		this.setState(InstaResetState.RUNNING);
 	}
 
@@ -147,9 +152,7 @@ public class InstaReset implements ClientModInitializer {
 		}
 		Pregenerator.PregeneratingPartialLevel level = currentLevel.get();
 		if (level != null) {
-			level.renderTaskQueue.set(null);
-			level.worldGenerationProgressTracker.set(null);
-			currentLevel.set(null);
+			((FlushableServer)(level.server)).setShouldFlush(false);
 		}
 		this.setState(InstaResetState.STOPPED);
 	}
@@ -157,7 +160,7 @@ public class InstaReset implements ClientModInitializer {
 	private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingPartialLevel> reference) {
 		Thread thread = new Thread(() -> {
 			try {
-				Pregenerator.uninitialize(reference.get());
+				Pregenerator.uninitialize(this.client, reference.get());
 			} catch (IOException e) {
 				logger.error("InstaReset - Cannot close Session");
 			} finally {
@@ -241,7 +244,7 @@ public class InstaReset implements ClientModInitializer {
 				throw new RuntimeException("Could not create save folder", var3);
 			}
 		}
-		return String.format("%s - %s", fileName, seedHash);
+		return String.format("%s - %s", fileName, seedHash.substring(0, 7));
 	}
 
 	@Environment(EnvType.CLIENT)
