@@ -16,8 +16,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.awt.*;
-
 @Mixin(OptionsScreen.class)
 public class OptionsScreenMixin extends Screen {
     @Unique
@@ -55,9 +53,9 @@ public class OptionsScreenMixin extends Screen {
 
         toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, new LiteralText(""), (buttonWidget) -> {
             if (InstaReset.instance().isModRunning()) {
-                InstaReset.instance().async_stop();;
+                InstaReset.instance().stopAsync();;
             } else {
-                InstaReset.instance().async_start();
+                InstaReset.instance().startAsync();
             }
         }));
         updateButtonsFromState(InstaReset.instance().getState());

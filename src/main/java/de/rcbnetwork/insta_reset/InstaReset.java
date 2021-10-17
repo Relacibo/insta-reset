@@ -14,7 +14,6 @@ import net.minecraft.world.*;
 import net.minecraft.world.gen.*;
 import net.minecraft.world.level.LevelInfo;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,7 +23,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -113,7 +111,7 @@ public class InstaReset implements ClientModInitializer {
 		return pregeneratingLevelQueue.poll();
 	}
 
-	public void async_start() {
+	public void startAsync() {
 		Thread thread = new Thread(() -> {
 			start();
 		});
@@ -134,7 +132,7 @@ public class InstaReset implements ClientModInitializer {
 		this.setState(InstaResetState.RUNNING);
 	}
 
-	public void async_stop() {
+	public void stopAsync() {
 		Thread thread = new Thread(() -> {
 			stop();
 		});
@@ -144,7 +142,7 @@ public class InstaReset implements ClientModInitializer {
 		this.setState(InstaResetState.STOPPING);
 		AtomicReference<Pregenerator.PregeneratingPartialLevel> reference = pregeneratingLevelQueue.poll();
 		while (reference != null) {
-			stopLevel_async(reference);
+			stopLevelAsync(reference);
 			reference = pregeneratingLevelQueue.poll();
 		}
 		Pregenerator.PregeneratingPartialLevel level = currentLevel.get();
@@ -156,7 +154,7 @@ public class InstaReset implements ClientModInitializer {
 		this.setState(InstaResetState.STOPPED);
 	}
 
-	private void stopLevel_async(AtomicReference<Pregenerator.PregeneratingPartialLevel> reference) {
+	private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingPartialLevel> reference) {
 		Thread thread = new Thread(() -> {
 			try {
 				Pregenerator.uninitialize(reference.get());
