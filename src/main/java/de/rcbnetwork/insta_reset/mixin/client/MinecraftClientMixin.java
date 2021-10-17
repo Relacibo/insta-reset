@@ -1,24 +1,17 @@
 package de.rcbnetwork.insta_reset.mixin.client;
 
-import com.google.gson.JsonElement;
-import com.mojang.authlib.GameProfileRepository;
-import com.mojang.authlib.minecraft.MinecraftSessionService;
-import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import com.mojang.datafixers.util.Function4;
-import com.mojang.serialization.DataResult;
-import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.Lifecycle;
 import de.rcbnetwork.insta_reset.InstaReset;
 import de.rcbnetwork.insta_reset.Pregenerator;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
+import de.rcbnetwork.insta_reset.interfaces.PauseableServer;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
-import net.minecraft.client.gui.screen.DatapackFailureScreen;
 import net.minecraft.client.gui.screen.LevelLoadingScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.network.ClientLoginNetworkHandler;
-import net.minecraft.client.toast.SystemToast;
 import net.minecraft.client.util.Session;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkState;
@@ -26,43 +19,28 @@ import net.minecraft.network.packet.c2s.handshake.HandshakeC2SPacket;
 import net.minecraft.network.packet.c2s.login.LoginHelloC2SPacket;
 import net.minecraft.resource.DataPackSettings;
 import net.minecraft.resource.ResourceManager;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.QueueingWorldGenerationProgressListener;
 import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.util.UserCache;
 import net.minecraft.util.crash.CrashException;
 import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
-import net.minecraft.util.dynamic.RegistryOps;
 import net.minecraft.util.profiler.Profiler;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.util.registry.RegistryTracker;
-import net.minecraft.util.registry.SimpleRegistry;
 import net.minecraft.world.SaveProperties;
-import net.minecraft.world.dimension.DimensionOptions;
 import net.minecraft.world.gen.GeneratorOptions;
 import net.minecraft.world.level.LevelInfo;
-import net.minecraft.world.level.LevelProperties;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Overwrite;
-import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.transformer.meta.MixinInner;
 
-import java.io.File;
 import java.io.IOException;
-import java.net.Proxy;
 import java.net.SocketAddress;
 import java.util.Queue;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -120,7 +98,7 @@ public class MinecraftClientMixin {
             return;
         }
         // MinecraftClient.java:1659
-        Pregenerator.PregeneratingPartialLevel currentLevel = InstaReset.instance().getCurrentLevel();
+        Pregenerator.PregeneratingLevel currentLevel = InstaReset.instance().getCurrentLevel();
         LevelStorage.Session session2 = currentLevel.session;
         MinecraftClient.IntegratedResourceManager integratedResourceManager2 = currentLevel.integratedResourceManager;
 
@@ -156,10 +134,10 @@ public class MinecraftClientMixin {
                 Thread.yield();
             }
 
-            if (worldGenProgressTracker.get().getProgressPercentage() < 100) {
+            if (!this.server.isLoading()) {
+                this.profiler.push("waitForServer");
                 LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker)this.worldGenProgressTracker.get());
                 this.openScreen(levelLoadingScreen);
-                this.profiler.push("waitForServer");
 
                 while(!this.server.isLoading()) {
                     levelLoadingScreen.tick();
@@ -177,6 +155,7 @@ public class MinecraftClientMixin {
                 }
                 this.profiler.pop();
             }
+            //((PauseableServer)this.server).setPausing(false);
             SocketAddress socketAddress = this.server.getNetworkIo().bindLocal();
             ClientConnection clientConnection = ClientConnection.connectLocal(socketAddress);
             clientConnection.setPacketListener(new ClientLoginNetworkHandler(clientConnection, (MinecraftClient)(Object)this, (Screen)null, (text) -> {

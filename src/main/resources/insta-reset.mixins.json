@@ -5,8 +5,8 @@
   "compatibilityLevel": "JAVA_8",
   "mixins": [
     "ServerChunkManagerMixin",
-    "MinecraftServerMixin"
-
+    "MinecraftServerMixin",
+    "WeightedBlockStateProviderMixin"
   ],
   "client": [
     "client/TitleScreenMixin",

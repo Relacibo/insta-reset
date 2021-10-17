@@ -51,7 +51,7 @@ public class OptionsScreenMixin extends Screen {
             this.client.openScreen(new TitleScreen());
         }));
 
-        toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, new LiteralText(""), (buttonWidget) -> {
+        toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, LiteralText.EMPTY, (buttonWidget) -> {
             if (InstaReset.instance().isModRunning()) {
                 InstaReset.instance().stopAsync();;
             } else {

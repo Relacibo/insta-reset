@@ -36,8 +36,8 @@ public class InstaReset implements ClientModInitializer {
 	private Logger logger = LogManager.getLogger();
 	private Config config;
 	private MinecraftClient client;
-	private Queue<AtomicReference<Pregenerator.PregeneratingPartialLevel>> pregeneratingLevelQueue = new LinkedList<>();
-	private AtomicReference<Pregenerator.PregeneratingPartialLevel> currentLevel = new AtomicReference<>();
+	private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedList<>();
+	private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
 	private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
 	private List<StateListener> stateListeners = new ArrayList<>();
@@ -83,7 +83,7 @@ public class InstaReset implements ClientModInitializer {
 		}
 	}
 
-	public Pregenerator.PregeneratingPartialLevel getCurrentLevel() {
+	public Pregenerator.PregeneratingLevel getCurrentLevel() {
 		return this.currentLevel.get();
 	}
 
@@ -101,14 +101,14 @@ public class InstaReset implements ClientModInitializer {
 		InstaReset._instance = this;
 	}
 
-	private AtomicReference<Pregenerator.PregeneratingPartialLevel> pollFromPregeneratingLevelQueue() {
-		/*Pregenerator.PregeneratingPartialLevel level = tryCreatePregeneratingLevel();
+	private AtomicReference<Pregenerator.PregeneratingLevel> pollFromPregeneratingLevelQueue() {
+		Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
 		if (level == null) {
 			this.stop();
 			logger.error("InstaReset - Cannot generate new level");
 			return null;
 		}
-		this.pregeneratingLevelQueue.offer(level);*/
+		this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
 		return pregeneratingLevelQueue.poll();
 	}
 
@@ -122,7 +122,7 @@ public class InstaReset implements ClientModInitializer {
 	public void start() {
 		this.setState(InstaResetState.STARTING);
 		for (int i = 0; i < this.config.settings.numberOfPregeneratingLevels; i++) {
-			Pregenerator.PregeneratingPartialLevel level = tryCreatePregeneratingLevel();
+			Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
 			if (level == null) {
 				this.stop();
 				logger.error("InstaReset - Cannot generate new level");
@@ -130,7 +130,7 @@ public class InstaReset implements ClientModInitializer {
 			}
 			this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
 		}
-		Pregenerator.PregeneratingPartialLevel level = this.currentLevel.get();
+		Pregenerator.PregeneratingLevel level = this.currentLevel.get();
 		if (level != null) {
 			((FlushableServer)(level.server)).setShouldFlush(true);
 		}
@@ -145,19 +145,19 @@ public class InstaReset implements ClientModInitializer {
 	}
 	public void stop() {
 		this.setState(InstaResetState.STOPPING);
-		AtomicReference<Pregenerator.PregeneratingPartialLevel> reference = pregeneratingLevelQueue.poll();
+		AtomicReference<Pregenerator.PregeneratingLevel> reference = pregeneratingLevelQueue.poll();
 		while (reference != null) {
 			stopLevelAsync(reference);
 			reference = pregeneratingLevelQueue.poll();
 		}
-		Pregenerator.PregeneratingPartialLevel level = currentLevel.get();
+		Pregenerator.PregeneratingLevel level = currentLevel.get();
 		if (level != null) {
 			((FlushableServer)(level.server)).setShouldFlush(false);
 		}
 		this.setState(InstaResetState.STOPPED);
 	}
 
-	private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingPartialLevel> reference) {
+	private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
 		Thread thread = new Thread(() -> {
 			try {
 				Pregenerator.uninitialize(this.client, reference.get());
@@ -172,7 +172,7 @@ public class InstaReset implements ClientModInitializer {
 
 	public void openNextLevel() {
 		this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Opening next level")));
-		AtomicReference<Pregenerator.PregeneratingPartialLevel> reference = this.pollFromPregeneratingLevelQueue();
+		AtomicReference<Pregenerator.PregeneratingLevel> reference = this.pollFromPregeneratingLevelQueue();
 		if (reference == null) {
 			this.stop();
 			this.client.method_29970(null);
@@ -185,20 +185,20 @@ public class InstaReset implements ClientModInitializer {
 			e.printStackTrace();
 		}
 		this.currentLevel = reference;
-		Pregenerator.PregeneratingPartialLevel level = reference.get();
+		Pregenerator.PregeneratingLevel level = reference.get();
 		String fileName = level.fileName;
 		LevelInfo levelInfo = level.levelInfo;
 		GeneratorOptions generatorOptions = level.generatorOptions;
 		// Make directory visible again
-		try {
+		/*try {
 			Files.setAttribute(Paths.get(fileName), "dos:hidden", false, LinkOption.NOFOLLOW_LINKS);
 		} catch (IOException e) {
 			e.printStackTrace();
-		}
+		}*/
 		this.client.method_29607(fileName, levelInfo, RegistryTracker.create(), generatorOptions);
 	}
 
-	public Pregenerator.PregeneratingPartialLevel tryCreatePregeneratingLevel() {
+	public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {
 		for (int failCounter = 0; true; failCounter++) {
 			try {
 				return createPregeneratingPartialLevel();
@@ -211,7 +211,7 @@ public class InstaReset implements ClientModInitializer {
 		}
 	}
 
-	public Pregenerator.PregeneratingPartialLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
+	public Pregenerator.PregeneratingLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
 		// createLevel() (CreateWorldScreen.java:245)
 		String levelName = this.generateLevelName();
 		// this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));

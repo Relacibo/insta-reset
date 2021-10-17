@@ -30,7 +30,7 @@ public class TitleScreenMixin extends Screen {
         // Add new button for starting auto resets.
         int x = this.width / 2 - 124;
         int y = this.height / 4 + 48;
-        this.addButton(new ButtonWidget(x, y, 20, 20, LiteralText.EMPTY, (buttonWidget) -> {
+        this.addButton(new ButtonWidget(x, y, 20, 20, new LiteralText("IR"), (buttonWidget) -> {
             this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Preparing levels")));
             instaReset.start();
             instaReset.openNextLevel();
