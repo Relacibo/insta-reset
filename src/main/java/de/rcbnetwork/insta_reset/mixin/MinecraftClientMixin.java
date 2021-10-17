@@ -155,26 +155,27 @@ public class MinecraftClientMixin {
                 Thread.yield();
             }
 
-            LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker)this.worldGenProgressTracker.get());
-            this.openScreen(levelLoadingScreen);
-            this.profiler.push("waitForServer");
+            if (worldGenProgressTracker.get().getProgressPercentage() < 100) {
+                LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker)this.worldGenProgressTracker.get());
+                this.openScreen(levelLoadingScreen);
+                this.profiler.push("waitForServer");
 
-            while(!this.server.isLoading()) {
-                levelLoadingScreen.tick();
-                this.render(false);
+                while(!this.server.isLoading()) {
+                    levelLoadingScreen.tick();
+                    this.render(false);
 
-                try {
-                    Thread.sleep(16L);
-                } catch (InterruptedException var18) {
+                    try {
+                        Thread.sleep(16L);
+                    } catch (InterruptedException var18) {
+                    }
+
+                    if (this.crashReport != null) {
+                        printCrashReport(this.crashReport);
+                        return;
+                    }
                 }
-
-                if (this.crashReport != null) {
-                    printCrashReport(this.crashReport);
-                    return;
-                }
+                this.profiler.pop();
             }
-
-            this.profiler.pop();
             SocketAddress socketAddress = this.server.getNetworkIo().bindLocal();
             ClientConnection clientConnection = ClientConnection.connectLocal(socketAddress);
             clientConnection.setPacketListener(new ClientLoginNetworkHandler(clientConnection, (MinecraftClient)(Object)this, (Screen)null, (text) -> {

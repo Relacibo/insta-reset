@@ -28,11 +28,16 @@ import net.minecraft.world.gen.*;
 import net.minecraft.world.level.LevelInfo;
 import net.minecraft.world.level.LevelProperties;
 import net.minecraft.world.level.storage.LevelStorage;
+import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -71,6 +76,9 @@ public class Pregenerator {
             throw var21;
         }
 
+        // Make directory hidden
+        //Files.setAttribute(Paths.get(fileName), "dos:hidden", true, LinkOption.NOFOLLOW_LINKS);
+
         MinecraftClient.IntegratedResourceManager integratedResourceManager2;
         try {
             // Maybe doesn't work!!
@@ -102,22 +110,31 @@ public class Pregenerator {
         SkullBlockEntity.setSessionService(minecraftSessionService);
         //UserCache.setUseRemote(false);
 
+        // MinecraftClient.java:351
+        final AtomicReference<Queue> renderTaskQueue = new AtomicReference<>(Queues.newConcurrentLinkedQueue());
         // loadWorld (MinecraftServer.java:314)
         final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker = new AtomicReference<>();
-        final AtomicReference<Queue> renderTaskQueue = new AtomicReference<>();
+        //  startIntegratedServer (MinecraftClient.java:1704)
         IntegratedServer server = (IntegratedServer)MinecraftServer.startServer((serverThread) -> {
             return new IntegratedServer(serverThread, client, registryTracker, session2, integratedResourceManager2.getResourcePackManager(), integratedResourceManager2.getServerResourceManager(), saveProperties, minecraftSessionService, gameProfileRepository, userCache, (i) -> {
                 WorldGenerationProgressTracker wgpt = new WorldGenerationProgressTracker(i + 0);
                 worldGenerationProgressTracker.set(wgpt);
                 wgpt.start();
-                // MinecraftClient.java:351
-                Queue rtg = Queues.newConcurrentLinkedQueue();
-                renderTaskQueue.set(rtg);
+                Queue rtg = renderTaskQueue.get();
                 rtg.getClass();
                 return new QueueingWorldGenerationProgressListener(wgpt, rtg::add);
             });
         });
         return new PregeneratingPartialLevel(hash, fileName, levelInfo, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+    }
+
+    public static void uninitialize(Pregenerator.PregeneratingPartialLevel level) throws IOException {
+        level.server.stop(true);
+        level.renderTaskQueue.set(null);
+        level.worldGenerationProgressTracker.set(null);
+        level.integratedResourceManager.close();
+        level.session.close();
+        FileUtils.deleteDirectory(Paths.get(level.fileName).toFile());
     }
 
     public static final class PregeneratingPartialLevel {

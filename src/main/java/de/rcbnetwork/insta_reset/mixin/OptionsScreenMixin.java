@@ -10,6 +10,7 @@ import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableText;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -26,34 +27,69 @@ public class OptionsScreenMixin extends Screen {
     @Unique
     final Text START_RESETTING_MESSAGE = new LiteralText("Start Resetting");
 
+    @Unique
+    ButtonWidget quitButton;
+
+    @Unique
+    ButtonWidget toggleModButton;
+
+    @Unique
+    InstaReset.StateListener instaResetStateListener;
+
+    @Shadow
+    Screen parent;
+
     protected OptionsScreenMixin(Text title) {
         super(title);
     }
 
     @Inject(method = "init", at = @At("TAIL"))
     private void extendInit(CallbackInfo info) {
-        boolean modIsRunning = InstaReset.instance().isModRunning();
-
         //Add button to disable the auto reset and quit
-        ButtonWidget quitButton = this.addButton(new ButtonWidget(0, this.height - 44, 100, 20, QUIT_BUTTON_MESSAGE, (buttonWidget) -> {
-            InstaReset.instance().stop();
-            buttonWidget.active = false;
-            this.client.world.disconnect();
+        quitButton = this.addButton(new ButtonWidget(0, this.height - 44, 100, 20, QUIT_BUTTON_MESSAGE, (buttonWidget) -> {
             this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
+            InstaReset.instance().stop();
+            this.client.world.disconnect();
             this.client.openScreen(new TitleScreen());
         }));
-        Text toggleButtonText = modIsRunning ? STOP_RESETTING_MESSAGE : START_RESETTING_MESSAGE;
 
-        this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, toggleButtonText, (buttonWidget) -> {
-            boolean isRunning = InstaReset.instance().isModRunning();
-            if (isRunning) {
-                InstaReset.instance().stop();
+        toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, new LiteralText(""), (buttonWidget) -> {
+            if (InstaReset.instance().isModRunning()) {
+                InstaReset.instance().async_stop();;
             } else {
-                InstaReset.instance().start();
+                InstaReset.instance().async_start();
             }
-            isRunning = InstaReset.instance().isModRunning();
-            quitButton.active = isRunning;
-            buttonWidget.setMessage(isRunning ? STOP_RESETTING_MESSAGE : START_RESETTING_MESSAGE);
         }));
+        updateButtonsFromState(InstaReset.instance().getState());
+        instaResetStateListener = (event) -> {
+            updateButtonsFromState(event.newState);
+        };
+        InstaReset.instance().addStateListener(this.instaResetStateListener);
+    }
+
+    @Inject(method = "removed", at = @At("RETURN"))
+    private void extendRemoved(CallbackInfo info) {
+        InstaReset.instance().removeStateListener(this.instaResetStateListener);
+    }
+
+    @Unique
+    void updateButtonsFromState(InstaReset.InstaResetState state) {
+        Text message = state == InstaReset.InstaResetState.RUNNING ? STOP_RESETTING_MESSAGE : START_RESETTING_MESSAGE;
+        switch (state) {
+            case RUNNING:
+                quitButton.active = true;
+                toggleModButton.active = true;
+                break;
+            case STARTING:
+            case STOPPING:
+                quitButton.active = false;
+                toggleModButton.active = false;
+                break;
+            case STOPPED:
+                quitButton.active = false;
+                toggleModButton.active = true;
+                break;
+        }
+        toggleModButton.setMessage(message);
     }
 }
