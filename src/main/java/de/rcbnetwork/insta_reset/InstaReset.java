@@ -17,9 +17,6 @@ import net.minecraft.world.level.LevelInfo;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.LinkOption;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -213,7 +210,7 @@ public class InstaReset implements ClientModInitializer {
     public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {
         for (int failCounter = 0; true; failCounter++) {
             try {
-                return createPregeneratingPartialLevel();
+                return createPregeneratingLevel();
             } catch (Exception e) {
                 if (failCounter == 5) {
                     return null;
@@ -223,7 +220,7 @@ public class InstaReset implements ClientModInitializer {
         }
     }
 
-    public Pregenerator.PregeneratingLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
+    public Pregenerator.PregeneratingLevel createPregeneratingLevel() throws IOException, ExecutionException, InterruptedException {
         // createLevel() (CreateWorldScreen.java:245)
         String levelName = this.generateLevelName();
         // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
