@@ -225,7 +225,7 @@ public class InstaReset implements ClientModInitializer {
 	}
 
 	private String generateLevelName() {
-		String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size());
+		String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1);
 		return levelName;
 	}
 
