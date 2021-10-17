@@ -2,7 +2,7 @@ package de.rcbnetwork.insta_reset.mixin;
 
 import de.rcbnetwork.insta_reset.InstaReset;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
-import de.rcbnetwork.insta_reset.interfaces.PauseableServer;
+import de.rcbnetwork.insta_reset.interfaces.InitiallyPauseableServer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.world.ServerWorld;
@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 @Mixin(MinecraftServer.class)
-public class MinecraftServerMixin implements FlushableServer, PauseableServer {
+public class MinecraftServerMixin implements FlushableServer, InitiallyPauseableServer {
     @Shadow
     @Final
     protected LevelStorage.Session session;
@@ -56,16 +56,16 @@ public class MinecraftServerMixin implements FlushableServer, PauseableServer {
     }
 
     @Unique
-    AtomicReference<Boolean> initialPausing = new AtomicReference<>(false);
+    private AtomicReference<Boolean> pausingInitially = new AtomicReference<>(false);
 
     @Override
-    public boolean isPausing() {
-        return initialPausing.get();
+    public boolean isPausingInitially() {
+        return pausingInitially.get();
     }
 
     @Override
-    public void setPausing(boolean initialPausing) {
-        this.initialPausing.set(initialPausing);
+    public void unpause() {
+        this.pausingInitially.set(false);
     }
 
     // kill save on the shutdown
@@ -114,16 +114,15 @@ public class MinecraftServerMixin implements FlushableServer, PauseableServer {
         }
     }
 
-    /*@Inject(method = "<init>", at = @At(value = "RETURN"))
+    @Inject(method = "<init>", at = @At(value = "RETURN"))
     private void extendInit(CallbackInfo info) {
-        //this.initialPausing.set(InstaReset.instance().isModRunning());
-    }*/
+        this.pausingInitially.set(InstaReset.instance().isModRunning());
+    }
 
-    /*@Redirect(method = "runServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;tick(Ljava/util/function/BooleanSupplier;)V", ordinal = 0))
+    @Redirect(method = "runServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;tick(Ljava/util/function/BooleanSupplier;)V", ordinal = 0))
     private void conditionalTick(MinecraftServer server, BooleanSupplier supplier) {
-        /*if (!this.initialPausing.get()) {
+        if (!this.pausingInitially.get()) {
             this.tick(supplier);
         }
-        this.tick(supplier);
-    }*/
+    }
 }
