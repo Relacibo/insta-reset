@@ -6,7 +6,8 @@
   "mixins": [
     "ServerChunkManagerMixin",
     "MinecraftServerMixin",
-    "WeightedBlockStateProviderMixin"
+    "WeightedBlockStateProviderMixin",
+    "IntegratedServerMixin"
   ],
   "client": [
     "client/TitleScreenMixin",

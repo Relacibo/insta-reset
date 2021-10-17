@@ -1,8 +1,6 @@
 package de.rcbnetwork.insta_reset.mixin;
 
-import de.rcbnetwork.insta_reset.InstaReset;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
-import de.rcbnetwork.insta_reset.interfaces.InitiallyPauseableServer;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.world.ServerWorld;
@@ -12,27 +10,17 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 
 @Mixin(MinecraftServer.class)
-public class MinecraftServerMixin implements FlushableServer, InitiallyPauseableServer {
+public class MinecraftServerMixin implements FlushableServer {
     @Shadow
     @Final
     protected LevelStorage.Session session;
-
-    @Shadow
-    @Final
-    Thread serverThread;
-
-    @Shadow
-    private void tick(BooleanSupplier supplier) {  }
 
     @Unique
     private AtomicReference<Boolean> _shouldFlush = new AtomicReference<>(false);
@@ -53,19 +41,6 @@ public class MinecraftServerMixin implements FlushableServer, InitiallyPauseable
     @Override
     public Object getFlushLock() {
         return flushLock;
-    }
-
-    @Unique
-    private AtomicReference<Boolean> pausingInitially = new AtomicReference<>(false);
-
-    @Override
-    public boolean isPausingInitially() {
-        return pausingInitially.get();
-    }
-
-    @Override
-    public void unpause() {
-        this.pausingInitially.set(false);
     }
 
     // kill save on the shutdown
@@ -111,18 +86,6 @@ public class MinecraftServerMixin implements FlushableServer, InitiallyPauseable
     private void shutdownPlayerSaveInject(PlayerManager playerManager) {
         if (!this.shouldFlush()) {
             playerManager.saveAllPlayerData();
-        }
-    }
-
-    @Inject(method = "<init>", at = @At(value = "RETURN"))
-    private void extendInit(CallbackInfo info) {
-        this.pausingInitially.set(InstaReset.instance().isModRunning());
-    }
-
-    @Redirect(method = "runServer", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/MinecraftServer;tick(Ljava/util/function/BooleanSupplier;)V", ordinal = 0))
-    private void conditionalTick(MinecraftServer server, BooleanSupplier supplier) {
-        if (!this.pausingInitially.get()) {
-            this.tick(supplier);
         }
     }
 }

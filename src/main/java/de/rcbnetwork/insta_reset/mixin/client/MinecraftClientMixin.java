@@ -5,7 +5,7 @@ import com.mojang.serialization.Lifecycle;
 import de.rcbnetwork.insta_reset.InstaReset;
 import de.rcbnetwork.insta_reset.Pregenerator;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
-import de.rcbnetwork.insta_reset.interfaces.InitiallyPauseableServer;
+import de.rcbnetwork.insta_reset.interfaces.InitiallyHibernatingServer;
 import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
@@ -134,11 +134,11 @@ public class MinecraftClientMixin {
                 Thread.yield();
             }
 
+            ((InitiallyHibernatingServer)this.server).wakeUp();
             if (!this.server.isLoading()) {
                 this.profiler.push("waitForServer");
                 LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker)this.worldGenProgressTracker.get());
                 this.openScreen(levelLoadingScreen);
-                ((InitiallyPauseableServer)this.server).unpause();
 
                 while(!this.server.isLoading()) {
                     levelLoadingScreen.tick();
@@ -156,7 +156,7 @@ public class MinecraftClientMixin {
                 }
                 this.profiler.pop();
             }
-            ((InitiallyPauseableServer)this.server).unpause();
+
             SocketAddress socketAddress = this.server.getNetworkIo().bindLocal();
             ClientConnection clientConnection = ClientConnection.connectLocal(socketAddress);
             clientConnection.setPacketListener(new ClientLoginNetworkHandler(clientConnection, (MinecraftClient)(Object)this, (Screen)null, (text) -> {
