@@ -28,230 +28,242 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
-	private static InstaReset _instance;
-	public static InstaReset instance() {
-		return _instance;
-	}
-	public static final String MOD_ID = "insta-reset";
-	private Logger logger = LogManager.getLogger();
-	private Config config;
-	private MinecraftClient client;
-	private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedList<>();
-	private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
-	private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
+    private static InstaReset _instance;
 
-	private List<StateListener> stateListeners = new ArrayList<>();
+    public static InstaReset instance() {
+        return _instance;
+    }
 
-	public void addStateListener(StateListener listener) {
-		stateListeners.add(listener);
-	}
+    public static final String MOD_ID = "insta-reset";
+    private Logger logger = LogManager.getLogger();
+    private Config config;
+    private MinecraftClient client;
+    private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedList<>();
+    private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
+    private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
-	public void removeStateListener(StateListener listener) {
-		stateListeners.remove(listener);
-	}
+    private List<StateListener> stateListeners = new ArrayList<>();
 
-	private void setState(InstaResetState state) {
-		InstaResetState oldState = this.state.get();
-		if (this.state.get() == state) {
-			return;
-		}
-		InstaResetStateChangedEvent event = new InstaResetStateChangedEvent(oldState, state);
-		stateListeners.forEach((listener) -> {
-			listener.update(event);
-		});
-		this.state.set(state);
-	}
+    public void addStateListener(StateListener listener) {
+        stateListeners.add(listener);
+    }
 
-	public enum InstaResetState {
-		STARTING,
-		RUNNING,
-		STOPPING,
-		STOPPED
-	}
+    public void removeStateListener(StateListener listener) {
+        stateListeners.remove(listener);
+    }
 
-	public interface StateListener {
-		void update(InstaResetStateChangedEvent event);
-	}
+    private void setState(InstaResetState state) {
+        InstaResetState oldState = this.state.get();
+        if (this.state.get() == state) {
+            return;
+        }
+        InstaResetStateChangedEvent event = new InstaResetStateChangedEvent(oldState, state);
+        stateListeners.forEach((listener) -> {
+            listener.update(event);
+        });
+        this.state.set(state);
+    }
 
-	public static final class InstaResetStateChangedEvent {
-		public final InstaResetState oldState;
-		public final InstaResetState newState;
+    public enum InstaResetState {
+        STARTING,
+        RUNNING,
+        STOPPING,
+        STOPPED
+    }
 
-		public InstaResetStateChangedEvent(InstaResetState oldState, InstaResetState newState) {
-			this.oldState = oldState;
-			this.newState = newState;
-		}
-	}
+    public interface StateListener {
+        void update(InstaResetStateChangedEvent event);
+    }
 
-	public Pregenerator.PregeneratingLevel getCurrentLevel() {
-		return this.currentLevel.get();
-	}
+    public static final class InstaResetStateChangedEvent {
+        public final InstaResetState oldState;
+        public final InstaResetState newState;
 
-	public boolean isModRunning() {
-		return state.get() == InstaResetState.RUNNING;
-	}
-	public InstaResetState getState() {
-		return this.state.get();
-	}
+        public InstaResetStateChangedEvent(InstaResetState oldState, InstaResetState newState) {
+            this.oldState = oldState;
+            this.newState = newState;
+        }
+    }
 
-	@Override
-	public void onInitializeClient() {
-		this.config = Config.load();
-		this.client = MinecraftClient.getInstance();
-		InstaReset._instance = this;
-	}
+    public Pregenerator.PregeneratingLevel getCurrentLevel() {
+        return this.currentLevel.get();
+    }
 
-	private AtomicReference<Pregenerator.PregeneratingLevel> pollFromPregeneratingLevelQueue() {
-		Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-		if (level == null) {
-			this.stop();
-			logger.error("InstaReset - Cannot generate new level");
-			return null;
-		}
-		this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
-		return pregeneratingLevelQueue.poll();
-	}
+    public boolean isModRunning() {
+        return state.get() == InstaResetState.RUNNING;
+    }
 
-	public void startAsync() {
-		Thread thread = new Thread(() -> {
-			start();
-		});
-		thread.start();
-	}
+    public InstaResetState getState() {
+        return this.state.get();
+    }
 
-	public void start() {
-		this.setState(InstaResetState.STARTING);
-		for (int i = 0; i < this.config.settings.numberOfPregeneratingLevels; i++) {
-			Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-			if (level == null) {
-				this.stop();
-				logger.error("InstaReset - Cannot generate new level");
-				return;
-			}
-			this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
-		}
-		Pregenerator.PregeneratingLevel level = this.currentLevel.get();
-		if (level != null) {
-			((FlushableServer)(level.server)).setShouldFlush(true);
-		}
-		this.setState(InstaResetState.RUNNING);
-	}
+    @Override
+    public void onInitializeClient() {
+        this.config = Config.load();
+        this.client = MinecraftClient.getInstance();
+        InstaReset._instance = this;
+    }
 
-	public void stopAsync() {
-		Thread thread = new Thread(() -> {
-			stop();
-		});
-		thread.start();
-	}
-	public void stop() {
-		this.setState(InstaResetState.STOPPING);
-		AtomicReference<Pregenerator.PregeneratingLevel> reference = pregeneratingLevelQueue.poll();
-		while (reference != null) {
-			stopLevelAsync(reference);
-			reference = pregeneratingLevelQueue.poll();
-		}
-		Pregenerator.PregeneratingLevel level = currentLevel.get();
-		if (level != null) {
-			((FlushableServer)(level.server)).setShouldFlush(false);
-		}
-		this.setState(InstaResetState.STOPPED);
-	}
+    private AtomicReference<Pregenerator.PregeneratingLevel> pollFromPregeneratingLevelQueue() {
+        Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
+        if (level == null) {
+            this.stop();
+            logger.error("InstaReset - Cannot generate new level");
+            return null;
+        }
+        this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
+        return pregeneratingLevelQueue.poll();
+    }
 
-	private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
-		Thread thread = new Thread(() -> {
-			try {
-				Pregenerator.uninitialize(this.client, reference.get());
-			} catch (IOException e) {
-				logger.error("InstaReset - Cannot close Session");
-			} finally {
-				reference.set(null);
-			}
-		});
-		thread.start();
-	}
+    public void startAsync() {
+        Thread thread = new Thread(() -> {
+            start();
+        });
+        thread.start();
+    }
 
-	public void openNextLevel() {
-		this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Opening next level")));
-		AtomicReference<Pregenerator.PregeneratingLevel> reference = this.pollFromPregeneratingLevelQueue();
-		if (reference == null) {
-			this.stop();
-			this.client.method_29970(null);
-			return;
-		}
-		this.config.settings.resetCounter++;
-		try {
-			config.writeChanges();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		this.currentLevel = reference;
-		Pregenerator.PregeneratingLevel level = reference.get();
-		String fileName = level.fileName;
-		LevelInfo levelInfo = level.levelInfo;
-		GeneratorOptions generatorOptions = level.generatorOptions;
-		// Make directory visible again
-		/*try {
-			Files.setAttribute(Paths.get(fileName), "dos:hidden", false, LinkOption.NOFOLLOW_LINKS);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}*/
-		this.client.method_29607(fileName, levelInfo, RegistryTracker.create(), generatorOptions);
-	}
+    public void start() {
+        this.setState(InstaResetState.STARTING);
+        Pregenerator.PregeneratingLevel level = this.currentLevel.get();
+        if (level == null) {
+            this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Opening next level")));
+            level = tryCreatePregeneratingLevel();
+            if (level == null) {
+                this.stop();
+                logger.error("InstaReset - Cannot generate new level");
+                return;
+            }
+            openLevel(new AtomicReference<>(level));
+        } else {
+            ((FlushableServer) (level.server)).setShouldFlush(true);
+        }
+        for (int i = 0; i < this.config.settings.numberOfPregeneratingLevels; i++) {
+            level = tryCreatePregeneratingLevel();
+            if (level == null) {
+                this.stop();
+                logger.error("InstaReset - Cannot generate new level");
+                return;
+            }
+            this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
+        }
+        this.setState(InstaResetState.RUNNING);
+    }
 
-	public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {
-		for (int failCounter = 0; true; failCounter++) {
-			try {
-				return createPregeneratingPartialLevel();
-			} catch (Exception e) {
-				if (failCounter == 5) {
-					return null;
-				}
-				failCounter++;
-			}
-		}
-	}
+    public void stopAsync() {
+        Thread thread = new Thread(() -> {
+            stop();
+        });
+        thread.start();
+    }
 
-	public Pregenerator.PregeneratingLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
-		// createLevel() (CreateWorldScreen.java:245)
-		String levelName = this.generateLevelName();
-		// this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
-		// At this point in the original code datapacks are copied into the world folder. (CreateWorldScreen.java:247)
+    public void stop() {
+        this.setState(InstaResetState.STOPPING);
+        AtomicReference<Pregenerator.PregeneratingLevel> reference = pregeneratingLevelQueue.poll();
+        while (reference != null) {
+            stopLevelAsync(reference);
+            reference = pregeneratingLevelQueue.poll();
+        }
+        Pregenerator.PregeneratingLevel level = currentLevel.get();
+        if (level != null) {
+            ((FlushableServer) (level.server)).setShouldFlush(false);
+        }
+        this.setState(InstaResetState.STOPPED);
+    }
 
-		// Shorter version of original code (MoreOptionsDialog.java:80 & MoreOptionsDialog.java:302)
-		GeneratorOptions generatorOptions = GeneratorOptions.getDefaultOptions().withHardcore(false, OptionalLong.empty());
-		LevelInfo levelInfo = new LevelInfo(levelName, GameMode.SURVIVAL, false, this.config.settings.difficulty, false, new GameRules(), DataPackSettings.SAFE_MODE);
-		String seedHash = Hashing.sha256().hashString(String.valueOf(generatorOptions.getSeed()), StandardCharsets.UTF_8).toString();
-		String fileName = this.generateFileName(levelName, seedHash);
-		// MoreOptionsDialog:79+326
-		RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
-		return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo);
-	}
+    private void stopLevelAsync(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+        Thread thread = new Thread(() -> {
+            try {
+                Pregenerator.uninitialize(this.client, reference.get());
+            } catch (IOException e) {
+                logger.error("InstaReset - Cannot close Session");
+            } finally {
+                reference.set(null);
+            }
+        });
+        thread.start();
+    }
 
-	private String generateLevelName() {
-		String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1);
-		return levelName;
-	}
+    public void openLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+        this.currentLevel = reference;
+        Pregenerator.PregeneratingLevel level = reference.get();
+        String fileName = level.fileName;
+        LevelInfo levelInfo = level.levelInfo;
+        GeneratorOptions generatorOptions = level.generatorOptions;
+        this.client.method_29607(fileName, levelInfo, RegistryTracker.create(), generatorOptions);
+        this.config.settings.resetCounter++;
+        try {
+            config.writeChanges();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
 
-	private String generateFileName(String levelName, String seedHash) {
-		String fileName;
-		// Ensure its a unique name (CreateWorldScreen.java:222)
-		try {
-			fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
-		} catch (Exception var4) {
-			try {
-				fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
-			} catch (Exception var3) {
-				throw new RuntimeException("Could not create save folder", var3);
-			}
-		}
-		return String.format("%s - %s", fileName, seedHash.substring(0, 7));
-	}
 
-	@Environment(EnvType.CLIENT)
-	static class WorldCreationException extends RuntimeException {
-		public WorldCreationException(Throwable throwable) {
-			super(throwable);
-		}
-	}
+    public void openNextLevel() {
+        this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Opening next level")));
+        AtomicReference<Pregenerator.PregeneratingLevel> reference = this.pollFromPregeneratingLevelQueue();
+        if (reference == null) {
+            this.stop();
+            this.client.method_29970(null);
+            return;
+        }
+        openLevel(reference);
+    }
+
+    public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {
+        for (int failCounter = 0; true; failCounter++) {
+            try {
+                return createPregeneratingPartialLevel();
+            } catch (Exception e) {
+                if (failCounter == 5) {
+                    return null;
+                }
+                failCounter++;
+            }
+        }
+    }
+
+    public Pregenerator.PregeneratingLevel createPregeneratingPartialLevel() throws IOException, ExecutionException, InterruptedException {
+        // createLevel() (CreateWorldScreen.java:245)
+        String levelName = this.generateLevelName();
+        // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
+        // At this point in the original code datapacks are copied into the world folder. (CreateWorldScreen.java:247)
+
+        // Shorter version of original code (MoreOptionsDialog.java:80 & MoreOptionsDialog.java:302)
+        GeneratorOptions generatorOptions = GeneratorOptions.getDefaultOptions().withHardcore(false, OptionalLong.empty());
+        LevelInfo levelInfo = new LevelInfo(levelName, GameMode.SURVIVAL, false, this.config.settings.difficulty, false, new GameRules(), DataPackSettings.SAFE_MODE);
+        String seedHash = Hashing.sha256().hashString(String.valueOf(generatorOptions.getSeed()), StandardCharsets.UTF_8).toString();
+        String fileName = this.generateFileName(levelName, seedHash);
+        // MoreOptionsDialog:79+326
+        RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
+        return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo);
+    }
+
+    private String generateLevelName() {
+        String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1);
+        return levelName;
+    }
+
+    private String generateFileName(String levelName, String seedHash) {
+        String fileName;
+        // Ensure its a unique name (CreateWorldScreen.java:222)
+        try {
+            fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
+        } catch (Exception var4) {
+            try {
+                fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
+            } catch (Exception var3) {
+                throw new RuntimeException("Could not create save folder", var3);
+            }
+        }
+        return String.format("%s - %s", fileName, seedHash.substring(0, 7));
+    }
+
+    @Environment(EnvType.CLIENT)
+    static class WorldCreationException extends RuntimeException {
+        public WorldCreationException(Throwable throwable) {
+            super(throwable);
+        }
+    }
 }
 

@@ -33,7 +33,6 @@ public class TitleScreenMixin extends Screen {
         this.addButton(new ButtonWidget(x, y, 20, 20, new LiteralText("IR"), (buttonWidget) -> {
             this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Preparing levels")));
             instaReset.start();
-            instaReset.openNextLevel();
         }));
     }
 }
