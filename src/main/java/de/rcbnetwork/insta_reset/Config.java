@@ -33,6 +33,7 @@ public class Config {
         public Difficulty difficulty = Difficulty.EASY;
         public int resetCounter = 0;
         public int numberOfPregeneratingLevels = 1;
+        public int expireAfterSeconds = 295;
     }
 
     private static final Gson GSON = new GsonBuilder()
@@ -73,7 +74,9 @@ public class Config {
         if (this.settings.numberOfPregeneratingLevels < 1) {
             this.settings.numberOfPregeneratingLevels = 1;
         }
-
+        if (this.settings.expireAfterSeconds <= 0) {
+            this.settings.expireAfterSeconds = -1;
+        }
     }
 
     public void writeChanges() throws IOException {

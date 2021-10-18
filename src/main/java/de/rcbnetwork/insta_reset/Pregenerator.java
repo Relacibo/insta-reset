@@ -9,7 +9,6 @@ import com.mojang.datafixers.util.Function4;
 import com.mojang.serialization.DataResult;
 import com.mojang.serialization.JsonOps;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
-import net.minecraft.block.entity.SkullBlockEntity;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.WorldGenerationProgressTracker;
 import net.minecraft.client.toast.SystemToast;
@@ -44,7 +43,7 @@ public class Pregenerator {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo, long expirationTimeStamp) throws IOException, ExecutionException, InterruptedException {
         // method_29605 (MinecraftClient.java:1645) + startIntegratedServer (MinecraftClient.java:1658)
         Function<LevelStorage.Session, DataPackSettings> function = (session) -> {
             return levelInfo.method_29558();
@@ -74,7 +73,6 @@ public class Pregenerator {
 
         MinecraftClient.IntegratedResourceManager integratedResourceManager2;
         try {
-            // Could be bad??
             integratedResourceManager2 = client.method_29604(registryTracker, function, function4, safeMode, session2);
         } catch (Exception var20) {
             try {
@@ -99,8 +97,8 @@ public class Pregenerator {
         MinecraftSessionService minecraftSessionService = yggdrasilAuthenticationService.createMinecraftSessionService();
         GameProfileRepository gameProfileRepository = yggdrasilAuthenticationService.createProfileRepository();
         UserCache userCache = new UserCache(gameProfileRepository, new File(client.runDirectory, MinecraftServer.USER_CACHE_FILE.getName()));
-        SkullBlockEntity.setUserCache(userCache);
-        SkullBlockEntity.setSessionService(minecraftSessionService);
+        //SkullBlockEntity.setUserCache(userCache);
+        //SkullBlockEntity.setSessionService(minecraftSessionService);
         //UserCache.setUseRemote(false);
 
         // MinecraftClient.java:351
@@ -120,7 +118,7 @@ public class Pregenerator {
         });
         // Fast-Reset: don't save when closing the server.
         ((FlushableServer)(server)).setShouldFlush(true);
-        return new PregeneratingLevel(hash, fileName, levelInfo, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+        return new PregeneratingLevel(hash, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
     public static void uninitialize(MinecraftClient client, PregeneratingLevel level) throws IOException {
@@ -163,9 +161,13 @@ public class Pregenerator {
 
         public final String hash;
 
+        public final long expirationTimeStamp;
+
         public final String fileName;
 
         public final LevelInfo levelInfo;
+
+        public final RegistryTracker.Modifiable registryTracker;
 
         public final GeneratorOptions generatorOptions;
 
@@ -183,10 +185,12 @@ public class Pregenerator {
 
         public final UserCache userCache;
 
-        public PregeneratingLevel(String hash, String fileName, LevelInfo levelInfo, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+        public PregeneratingLevel(String hash, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
             this.hash = hash;
+            this.expirationTimeStamp = expirationTimeStamp;
             this.fileName = fileName;
             this.levelInfo = levelInfo;
+            this.registryTracker = registryTracker;
             this.generatorOptions = generatorOptions;
             this.integratedResourceManager = integratedResourceManager;
             this.session = session;

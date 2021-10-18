@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(OptionsScreen.class)
 public class OptionsScreenMixin extends Screen {
     @Unique
-    final Text QUIT_BUTTON_MESSAGE = new LiteralText("Save & Stop Reset & Quit");
+    final Text QUIT_BUTTON_MESSAGE = new LiteralText("Save & Quit");
     @Unique
     final Text STOP_RESETTING_MESSAGE = new LiteralText("Stop Resetting");
     @Unique
@@ -48,12 +48,12 @@ public class OptionsScreenMixin extends Screen {
             this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
             InstaReset.instance().stop();
             this.client.world.disconnect();
-            this.client.openScreen(new TitleScreen());
+            this.client.openScreen(null);
         }));
 
         toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, LiteralText.EMPTY, (buttonWidget) -> {
             if (InstaReset.instance().isModRunning()) {
-                InstaReset.instance().stopAsync();;
+                InstaReset.instance().stop();;
             } else {
                 InstaReset.instance().startAsync();
             }

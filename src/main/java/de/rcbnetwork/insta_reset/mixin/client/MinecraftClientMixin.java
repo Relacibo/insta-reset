@@ -94,7 +94,8 @@ public class MinecraftClientMixin {
 
     @Inject(method = "startIntegratedServer(Ljava/lang/String;Lnet/minecraft/util/registry/RegistryTracker$Modifiable;Ljava/util/function/Function;Lcom/mojang/datafixers/util/Function4;ZLnet/minecraft/client/MinecraftClient$WorldLoadAction;)V", at = @At("HEAD"), cancellable = true)
     private void replaceStartIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction, CallbackInfo info) {
-        if (!InstaReset.instance().isModRunning()) {
+        InstaReset.InstaResetState state = InstaReset.instance().getState();
+        if (state != InstaReset.InstaResetState.STARTING && state != InstaReset.InstaResetState.RUNNING) {
             return;
         }
         // MinecraftClient.java:1659
@@ -110,7 +111,7 @@ public class MinecraftClientMixin {
             this.worldGenProgressTracker = currentLevel.worldGenerationProgressTracker;
 
             try {
-                session2.method_27425(registryTracker, saveProperties);
+                //session2.method_27425(registryTracker, saveProperties);
                 //integratedResourceManager2.getServerResourceManager().loadRegistryTags();
                 //YggdrasilAuthenticationService yggdrasilAuthenticationService = new YggdrasilAuthenticationService(this.netProxy, UUID.randomUUID().toString());
                 //MinecraftSessionService minecraftSessionService = yggdrasilAuthenticationService.createMinecraftSessionService();
