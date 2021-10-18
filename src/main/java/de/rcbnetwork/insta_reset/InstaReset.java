@@ -3,14 +3,11 @@ package de.rcbnetwork.insta_reset;
 import com.google.common.hash.Hashing;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.api.EnvType;
-import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.resource.DataPackSettings;
 import net.minecraft.text.LiteralText;
 import net.minecraft.util.FileNameUtil;
-import net.minecraft.util.registry.Registry;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.world.*;
 import net.minecraft.world.gen.*;
@@ -22,7 +19,6 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -42,8 +38,12 @@ public class InstaReset implements ClientModInitializer {
     private MinecraftClient client;
     private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedBlockingQueue<>();
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
-    private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
+    public Pregenerator.PregeneratingLevel getCurrentLevel() {
+        return this.currentLevel.get();
+    }
+
+    private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
     private List<StateListener> stateListeners = new ArrayList<>();
 
     public void addStateListener(StateListener listener) {
@@ -85,10 +85,6 @@ public class InstaReset implements ClientModInitializer {
             this.oldState = oldState;
             this.newState = newState;
         }
-    }
-
-    public Pregenerator.PregeneratingLevel getCurrentLevel() {
-        return this.currentLevel.get();
     }
 
     public boolean isModRunning() {
@@ -138,7 +134,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void start() {
-        log("Initializing Server Queue!");
+        log("Starting!");
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (client.getNetworkHandler() == null) {
@@ -147,6 +143,12 @@ public class InstaReset implements ClientModInitializer {
                 this.stop();
                 log(Level.ERROR, "Cannot generate new level");
                 return;
+            }
+            this.config.settings.resetCounter++;
+            try {
+                config.writeChanges();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
             refillQueueAsync();
             openLevel(new AtomicReference<>(level));
@@ -165,6 +167,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void stop() {
+        log("Stopping!");
         this.setState(InstaResetState.STOPPING);
         AtomicReference<Pregenerator.PregeneratingLevel> reference = pregeneratingLevelQueue.poll();
         while (reference != null) {
@@ -181,17 +184,21 @@ public class InstaReset implements ClientModInitializer {
 
     private void removeLevelAsync(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
         Thread thread = new Thread(() -> {
-            try {
-                Pregenerator.PregeneratingLevel level = reference.get();
-                log(String.format("Removing Level: %s", level.hash));
-                Pregenerator.uninitialize(this.client, reference.get());
-            } catch (IOException e) {
-                log(Level.ERROR, "Cannot close Session");
-            } finally {
-                reference.set(null);
-            }
+            removeLevel(reference);
         });
         thread.start();
+    }
+
+    private void removeLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+        try {
+            Pregenerator.PregeneratingLevel level = reference.get();
+            log(String.format("Removing Level: %s", level.hash));
+            Pregenerator.uninitialize(this.client, reference.get());
+        } catch (IOException e) {
+            log(Level.ERROR, "Cannot close Session");
+        } finally {
+            reference.set(null);
+        }
     }
 
     public void openLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
@@ -205,27 +212,20 @@ public class InstaReset implements ClientModInitializer {
         RegistryTracker.Modifiable registryTracker = level.registryTracker;
         // CreateWorldScreen.java:258
         this.client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
-        this.config.settings.resetCounter++;
-        try {
-            config.writeChanges();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
     }
 
     void refillQueueAsync() {
         Thread thread = new Thread(() -> {
-            for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
-                Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-                if (level == null) {
-                    this.stop();
-                    log(Level.ERROR, "Cannot generate new level");
-                    return;
-                }
-                this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
-                log(String.format("Queued level: %s", level.hash));
+        for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
+            Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
+            if (level == null) {
+                this.stop();
+                log(Level.ERROR, "Cannot generate new level");
+                return;
             }
-        });
+            this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
+            log(String.format("Queued level: %s", level.hash));
+        }});
         thread.start();
     }
 
@@ -236,6 +236,12 @@ public class InstaReset implements ClientModInitializer {
             this.stop();
             this.client.method_29970(null);
             return;
+        }
+        this.config.settings.resetCounter++;
+        try {
+            config.writeChanges();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
         refillQueueAsync();
         openLevel(reference);
@@ -290,13 +296,6 @@ public class InstaReset implements ClientModInitializer {
             }
         }
         return fileName;
-    }
-
-    @Environment(EnvType.CLIENT)
-    static class WorldCreationException extends RuntimeException {
-        public WorldCreationException(Throwable throwable) {
-            super(throwable);
-        }
     }
 
     public static void log(String message) {

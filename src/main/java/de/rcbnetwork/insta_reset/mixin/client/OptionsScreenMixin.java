@@ -4,8 +4,10 @@ import de.rcbnetwork.insta_reset.InstaReset;
 import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.TitleScreen;
+import net.minecraft.client.gui.screen.multiplayer.MultiplayerScreen;
 import net.minecraft.client.gui.screen.options.OptionsScreen;
 import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.realms.RealmsBridge;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 import net.minecraft.text.TranslatableText;
@@ -46,13 +48,31 @@ public class OptionsScreenMixin extends Screen {
         //Add button to disable the auto reset and quit
         quitButton = this.addButton(new ButtonWidget(0, this.height - 44, 100, 20, QUIT_BUTTON_MESSAGE, (buttonWidget) -> {
             InstaReset.instance().stop();
-            this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
-            this.client.openScreen(null);
+            boolean bl = this.client.isInSingleplayer();
+            boolean bl2 = this.client.isConnectedToRealms();
+            buttonWidget.active = false;
+            this.client.world.disconnect();
+            if (bl) {
+                this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
+            } else {
+                this.client.disconnect();
+            }
+
+            if (bl) {
+                this.client.openScreen(new TitleScreen());
+            } else if (bl2) {
+                RealmsBridge realmsBridge = new RealmsBridge();
+                realmsBridge.switchToRealms(new TitleScreen());
+            } else {
+                this.client.openScreen(new MultiplayerScreen(new TitleScreen()));
+            }
         }));
 
         toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, LiteralText.EMPTY, (buttonWidget) -> {
+            buttonWidget.active = false;
             if (InstaReset.instance().isModRunning()) {
-                InstaReset.instance().stop();;
+                InstaReset.instance().stop();
+                ;
             } else {
                 InstaReset.instance().startAsync();
             }
