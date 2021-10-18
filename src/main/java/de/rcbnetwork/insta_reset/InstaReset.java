@@ -8,6 +8,7 @@ import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.resource.DataPackSettings;
+import net.minecraft.text.LiteralText;
 import net.minecraft.text.TranslatableText;
 import net.minecraft.util.FileNameUtil;
 import net.minecraft.util.registry.RegistryTracker;
@@ -21,6 +22,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -31,8 +33,9 @@ public class InstaReset implements ClientModInitializer {
         return _instance;
     }
 
+    public static final String MOD_NAME = "InstaReset";
     public static final String MOD_ID = "insta-reset";
-    private Logger logger = LogManager.getLogger();
+    private static final Logger logger = LogManager.getLogger();
     private Config config;
     private MinecraftClient client;
     private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedList<>();
@@ -105,10 +108,11 @@ public class InstaReset implements ClientModInitializer {
         Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
         if (level == null) {
             this.stop();
-            logger.error("InstaReset - Cannot generate new level");
+            log(Level.ERROR, "Cannot generate new level");
             return null;
         }
         this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
+        log(Level.INFO, String.format("Queued level: %s", level.hash));
         return pregeneratingLevelQueue.poll();
     }
 
@@ -120,14 +124,14 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void start() {
+        log(Level.ERROR, "Initializing Server Queue!");
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (level == null) {
-            this.client.method_29970(new SaveLevelScreen(new TranslatableText("InstaReset - Opening next level")));
             level = tryCreatePregeneratingLevel();
             if (level == null) {
                 this.stop();
-                logger.error("InstaReset - Cannot generate new level");
+                log(Level.ERROR, "Cannot generate new level");
                 return;
             }
             openLevel(new AtomicReference<>(level));
@@ -138,7 +142,7 @@ public class InstaReset implements ClientModInitializer {
             level = tryCreatePregeneratingLevel();
             if (level == null) {
                 this.stop();
-                logger.error("InstaReset - Cannot generate new level");
+                log(Level.ERROR, "Cannot generate new level");
                 return;
             }
             this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
@@ -172,7 +176,7 @@ public class InstaReset implements ClientModInitializer {
             try {
                 Pregenerator.uninitialize(this.client, reference.get());
             } catch (IOException e) {
-                logger.error("InstaReset - Cannot close Session");
+                log(Level.ERROR, "Cannot close Session");
             } finally {
                 reference.set(null);
             }
@@ -181,8 +185,10 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void openLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+        this.client.method_29970(new SaveLevelScreen(new LiteralText("InstaReset - Opening next level")));
         this.currentLevel = reference;
         Pregenerator.PregeneratingLevel level = reference.get();
+        log(Level.INFO, String.format("Opening level: %s", level.hash));
         String fileName = level.fileName;
         LevelInfo levelInfo = level.levelInfo;
         GeneratorOptions generatorOptions = level.generatorOptions;
@@ -242,18 +248,18 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String generateFileName(String levelName, String seedHash) {
-        String fileName;
+        String fileName = String.format("%s - %s", levelName, seedHash.substring(0, 7));
         // Ensure its a unique name (CreateWorldScreen.java:222)
         try {
-            fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
+            fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), fileName, "");
         } catch (Exception var4) {
             try {
-                fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), levelName, "");
+                fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), fileName, "");
             } catch (Exception var3) {
                 throw new RuntimeException("Could not create save folder", var3);
             }
         }
-        return String.format("%s - %s", fileName, seedHash.substring(0, 7));
+        return fileName;
     }
 
     @Environment(EnvType.CLIENT)
@@ -261,6 +267,13 @@ public class InstaReset implements ClientModInitializer {
         public WorldCreationException(Throwable throwable) {
             super(throwable);
         }
+    }
+
+    public static void log(String message){
+        logger.log(Level.INFO, "["+MOD_NAME+"] " + message);
+    }
+    public static void log(Level level, String message){
+        logger.log(level, "["+MOD_NAME+"] " + message);
     }
 }
 

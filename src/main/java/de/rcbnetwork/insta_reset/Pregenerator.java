@@ -58,7 +58,7 @@ public class Pregenerator {
             return new LevelProperties(levelInfo, generatorOptions.method_29573(simpleRegistry), dataResult.lifecycle());
         };
         boolean safeMode = false;
-        //MinecraftClient.WorldLoadAction worldLoadAction = MinecraftClient.WorldLoadAction.CREATE;
+        MinecraftClient.WorldLoadAction worldLoadAction = MinecraftClient.WorldLoadAction.CREATE;
 
         // startIntegratedServer (MinecraftClient.java:1658)
         LevelStorage levelStorage = client.getLevelStorage();
@@ -71,9 +71,6 @@ public class Pregenerator {
             SystemToast.addWorldAccessFailureToast(client, fileName);
             throw var21;
         }
-
-        // Make directory hidden
-        //Files.setAttribute(Paths.get(fileName), "dos:hidden", true, LinkOption.NOFOLLOW_LINKS);
 
         MinecraftClient.IntegratedResourceManager integratedResourceManager2;
         try {
@@ -91,10 +88,10 @@ public class Pregenerator {
 
         SaveProperties saveProperties = integratedResourceManager2.getSaveProperties();
 
-        // boolean bl = saveProperties.getGeneratorOptions().isLegacyCustomizedType();
-        // boolean bl2 = saveProperties.method_29588() != Lifecycle.stable();
-        // if (worldLoadAction == MinecraftClient.WorldLoadAction.NONE || !bl && !bl2) {
-        // bl is always false and method_29588 should always return stable
+        //boolean bl = saveProperties.getGeneratorOptions().isLegacyCustomizedType();
+        //boolean bl2 = saveProperties.method_29588() != Lifecycle.stable();
+        //if (worldLoadAction == MinecraftClient.WorldLoadAction.NONE || !bl && !bl2) {
+        //bl is always false and method_29588 should always return stable
         // MinecraftClient.java:1691
         session2.method_27425(registryTracker, saveProperties);
         integratedResourceManager2.getServerResourceManager().loadRegistryTags();
@@ -164,7 +161,7 @@ public class Pregenerator {
 
     public static final class PregeneratingLevel {
 
-        private final String hash;
+        public final String hash;
 
         public final String fileName;
 

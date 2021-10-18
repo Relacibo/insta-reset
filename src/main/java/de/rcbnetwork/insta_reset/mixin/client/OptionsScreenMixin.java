@@ -19,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(OptionsScreen.class)
 public class OptionsScreenMixin extends Screen {
     @Unique
-    final Text QUIT_BUTTON_MESSAGE = new LiteralText("Quit to main menu");
+    final Text QUIT_BUTTON_MESSAGE = new LiteralText("Save & Stop Reset & Quit");
     @Unique
     final Text STOP_RESETTING_MESSAGE = new LiteralText("Stop Resetting");
     @Unique
