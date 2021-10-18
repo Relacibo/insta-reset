@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -39,7 +40,7 @@ public class InstaReset implements ClientModInitializer {
     private static final Logger logger = LogManager.getLogger();
     private Config config;
     private MinecraftClient client;
-    private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedList<>();
+    private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedBlockingQueue<>();
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
@@ -106,13 +107,14 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private boolean isLevelExpired(Pregenerator.PregeneratingLevel level) {
-        return level.expirationTimeStamp > new Date().getTime();
+        return level.expirationTimeStamp < new Date().getTime();
     }
 
     private void removeExpiredLevelsFromQueue() {
-        this.pregeneratingLevelQueue.stream().filter((elem) -> {
-            return isLevelExpired(elem.get());
-        }).forEach((elem) -> this.pregeneratingLevelQueue.remove(elem));
+        this.pregeneratingLevelQueue.stream().filter((elem) -> isLevelExpired(elem.get())).forEach((elem) -> {
+            this.pregeneratingLevelQueue.remove(elem);
+            removeLevelAsync(elem);
+        });
     }
 
     private AtomicReference<Pregenerator.PregeneratingLevel> pollFromPregeneratingLevelQueue() {
@@ -237,7 +239,6 @@ public class InstaReset implements ClientModInitializer {
         }
         refillQueueAsync();
         openLevel(reference);
-
     }
 
     public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {

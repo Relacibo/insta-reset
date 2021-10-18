@@ -45,9 +45,8 @@ public class OptionsScreenMixin extends Screen {
     private void extendInit(CallbackInfo info) {
         //Add button to disable the auto reset and quit
         quitButton = this.addButton(new ButtonWidget(0, this.height - 44, 100, 20, QUIT_BUTTON_MESSAGE, (buttonWidget) -> {
-            this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
             InstaReset.instance().stop();
-            this.client.world.disconnect();
+            this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
             this.client.openScreen(null);
         }));
 
