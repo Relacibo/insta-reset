@@ -22,7 +22,6 @@ public class Config {
     private static final Logger LOGGER = LogManager.getLogger();
 
 
-
     public final Settings settings = new Settings();
 
     public String getFileName() {
@@ -93,7 +92,7 @@ public class Config {
         } catch (IOException e) {
             throw new RuntimeException("Could not save configuration file", e);
         }
-}
+    }
 
     private static Path getConfigPath(String name) {
         return FabricLoader.getInstance()

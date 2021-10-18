@@ -69,28 +69,36 @@ public class MinecraftClientMixin {
     ClientConnection connection;
 
     @Shadow
-    void disconnect() {}
+    void disconnect() {
+    }
 
     @Shadow
-    void openScreen(@Nullable Screen screen) {}
+    void openScreen(@Nullable Screen screen) {
+    }
 
     @Shadow
     static Logger LOGGER;
 
     @Shadow
-    void render(boolean tick) {}
+    void render(boolean tick) {
+    }
 
     @Shadow
-    static void printCrashReport(CrashReport crashReport) {}
+    static void printCrashReport(CrashReport crashReport) {
+    }
 
     @Shadow
-    public Session getSession() { return null; }
+    public Session getSession() {
+        return null;
+    }
 
     @Shadow
-    private void method_29601(MinecraftClient.WorldLoadAction worldLoadAction, String string, boolean bl, Runnable runnable) { }
+    private void method_29601(MinecraftClient.WorldLoadAction worldLoadAction, String string, boolean bl, Runnable runnable) {
+    }
 
     @Shadow
-    private void startIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction) {}
+    private void startIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction) {
+    }
 
     @Inject(method = "startIntegratedServer(Ljava/lang/String;Lnet/minecraft/util/registry/RegistryTracker$Modifiable;Ljava/util/function/Function;Lcom/mojang/datafixers/util/Function4;ZLnet/minecraft/client/MinecraftClient$WorldLoadAction;)V", at = @At("HEAD"), cancellable = true)
     private void replaceStartIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction, CallbackInfo info) {
@@ -126,22 +134,22 @@ public class MinecraftClientMixin {
             } catch (Throwable var19) {
                 CrashReport crashReport = CrashReport.create(var19, "Starting integrated server");
                 CrashReportSection crashReportSection = crashReport.addElement("Starting integrated server");
-                crashReportSection.add("Level ID", (Object)worldName);
-                crashReportSection.add("Level Name", (Object)saveProperties.getLevelName());
+                crashReportSection.add("Level ID", (Object) worldName);
+                crashReportSection.add("Level Name", (Object) saveProperties.getLevelName());
                 throw new CrashException(crashReport);
             }
 
-            while(this.worldGenProgressTracker.get() == null) {
+            while (this.worldGenProgressTracker.get() == null) {
                 Thread.yield();
             }
 
-            ((InitiallyHibernatingServer)this.server).wakeUp();
+            ((InitiallyHibernatingServer) this.server).wakeUp();
             if (!this.server.isLoading()) {
                 this.profiler.push("waitForServer");
-                LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker)this.worldGenProgressTracker.get());
+                LevelLoadingScreen levelLoadingScreen = new LevelLoadingScreen((WorldGenerationProgressTracker) this.worldGenProgressTracker.get());
                 this.openScreen(levelLoadingScreen);
 
-                while(!this.server.isLoading()) {
+                while (!this.server.isLoading()) {
                     levelLoadingScreen.tick();
                     this.render(false);
 
@@ -160,7 +168,7 @@ public class MinecraftClientMixin {
 
             SocketAddress socketAddress = this.server.getNetworkIo().bindLocal();
             ClientConnection clientConnection = ClientConnection.connectLocal(socketAddress);
-            clientConnection.setPacketListener(new ClientLoginNetworkHandler(clientConnection, (MinecraftClient)(Object)this, (Screen)null, (text) -> {
+            clientConnection.setPacketListener(new ClientLoginNetworkHandler(clientConnection, (MinecraftClient) (Object) this, (Screen) null, (text) -> {
             }));
             clientConnection.send(new HandshakeC2SPacket(socketAddress.toString(), 0, NetworkState.LOGIN));
             clientConnection.send(new LoginHelloC2SPacket(this.getSession().getProfile()));
@@ -174,7 +182,7 @@ public class MinecraftClientMixin {
             try {
                 session2.close();
             } catch (IOException var17) {
-                LOGGER.warn((String)"Failed to unlock access to level {}", (Object)worldName, (Object)var17);
+                LOGGER.warn((String) "Failed to unlock access to level {}", (Object) worldName, (Object) var17);
             }
 
         }
@@ -182,10 +190,10 @@ public class MinecraftClientMixin {
     }
 
     // From Fast-Reset-Mod
-    @Inject(method = "method_29607", at=@At("HEAD"))
-    public void worldWait(String worldName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, CallbackInfo ci){
-        if (this.server != null && ((FlushableServer)this.server).shouldFlush()) {
-            synchronized(((FlushableServer)this.server).getFlushLock()){
+    @Inject(method = "method_29607", at = @At("HEAD"))
+    public void worldWait(String worldName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, CallbackInfo ci) {
+        if (this.server != null && ((FlushableServer) this.server).shouldFlush()) {
+            synchronized (((FlushableServer) this.server).getFlushLock()) {
                 System.out.println("done waiting for save lock");
             }
         }

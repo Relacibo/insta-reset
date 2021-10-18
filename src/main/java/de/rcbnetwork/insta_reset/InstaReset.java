@@ -216,16 +216,17 @@ public class InstaReset implements ClientModInitializer {
 
     void refillQueueAsync() {
         Thread thread = new Thread(() -> {
-        for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
-            Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-            if (level == null) {
-                this.stop();
-                log(Level.ERROR, "Cannot generate new level");
-                return;
+            for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
+                Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
+                if (level == null) {
+                    this.stop();
+                    log(Level.ERROR, "Cannot generate new level");
+                    return;
+                }
+                this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
+                log(String.format("Queued level: %s", level.hash));
             }
-            this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
-            log(String.format("Queued level: %s", level.hash));
-        }});
+        });
         thread.start();
     }
 

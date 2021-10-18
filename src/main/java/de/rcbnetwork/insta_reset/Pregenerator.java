@@ -66,7 +66,7 @@ public class Pregenerator {
             // fileName == worldName (CreateWorldScreen.java:221)
             session2 = levelStorage.createSession(fileName);
         } catch (IOException var21) {
-            LOGGER.warn((String)"Failed to read level {} data", (Object)fileName, (Object)var21);
+            LOGGER.warn((String) "Failed to read level {} data", (Object) fileName, (Object) var21);
             SystemToast.addWorldAccessFailureToast(client, fileName);
             throw var21;
         }
@@ -78,7 +78,7 @@ public class Pregenerator {
             try {
                 session2.close();
             } catch (IOException var16) {
-                LOGGER.warn((String)"Failed to unlock access to level {}", (Object)fileName, (Object)var16);
+                LOGGER.warn((String) "Failed to unlock access to level {}", (Object) fileName, (Object) var16);
             } finally {
                 throw var20;
             }
@@ -106,7 +106,7 @@ public class Pregenerator {
         // loadWorld (MinecraftServer.java:314)
         final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker = new AtomicReference<>();
         //  startIntegratedServer (MinecraftClient.java:1704)
-        IntegratedServer server = (IntegratedServer)MinecraftServer.startServer((serverThread) -> {
+        IntegratedServer server = (IntegratedServer) MinecraftServer.startServer((serverThread) -> {
             return new IntegratedServer(serverThread, client, registryTracker, session2, integratedResourceManager2.getResourcePackManager(), integratedResourceManager2.getServerResourceManager(), saveProperties, minecraftSessionService, gameProfileRepository, userCache, (i) -> {
                 WorldGenerationProgressTracker wgpt = new WorldGenerationProgressTracker(i + 0);
                 worldGenerationProgressTracker.set(wgpt);
@@ -117,7 +117,7 @@ public class Pregenerator {
             });
         });
         // Fast-Reset: don't save when closing the server.
-        ((FlushableServer)(server)).setShouldFlush(true);
+        ((FlushableServer) (server)).setShouldFlush(true);
         return new PregeneratingLevel(hash, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
@@ -153,7 +153,7 @@ public class Pregenerator {
             }
         } catch (IOException var17) {
             SystemToast.addWorldDeleteFailureToast(client, level.fileName);
-            LOGGER.error((String)"Failed to delete world {}", (Object)level.fileName, (Object)var17);
+            LOGGER.error((String) "Failed to delete world {}", (Object) level.fileName, (Object) var17);
         }
     }
 

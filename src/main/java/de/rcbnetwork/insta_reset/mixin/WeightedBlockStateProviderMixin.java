@@ -27,7 +27,7 @@ public class WeightedBlockStateProviderMixin {
     public void replaceGetBlockState(Random random, BlockPos pos, CallbackInfoReturnable info) {
         // We need to ensure, that pickRandom is only called once at a time, because it actually mutates this.states.
         synchronized (statesLock) {
-            info.setReturnValue((BlockState)this.states.pickRandom(random));
+            info.setReturnValue((BlockState) this.states.pickRandom(random));
         }
     }
 }
