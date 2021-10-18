@@ -11,3 +11,5 @@ When the mod first is executed, a config file *insta-reset.json* will be created
 * `difficulty` (default: EASY): HARDCORE currently not supported.
 * `reset_counter` (default: 0): Number of past resets. Increments as you reset with this mod.
 * `number_of_pregenerating_levels` (default: 1, min: 1): Number of levels generating in the background (Number does not include the server the client is currently connected to. So if `number_of_pregenerating_levels` is 1, there are actually two servers concurrently running.) .
+* `expire_after_seconds` (default: 295): Levels in the queue expire after n seconds and will be discarded, if the player doesn't load it. If set to -1, never discard a level. 
+* 
