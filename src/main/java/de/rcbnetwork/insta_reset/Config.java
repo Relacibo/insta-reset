@@ -34,6 +34,7 @@ public class Config {
         public int numberOfPregeneratingLevels = 1;
         public int expireAfterSeconds = 280;
         public boolean showStatusList = true;
+        public int timeBetweenStartsMs = 1000;
     }
 
     private static final Gson GSON = new GsonBuilder()
