@@ -17,10 +17,13 @@ import net.minecraft.network.ClientConnection;
 import net.minecraft.network.NetworkState;
 import net.minecraft.network.packet.c2s.handshake.HandshakeC2SPacket;
 import net.minecraft.network.packet.c2s.login.LoginHelloC2SPacket;
-import net.minecraft.resource.DataPackSettings;
-import net.minecraft.resource.ResourceManager;
+import net.minecraft.resource.*;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.util.UserCache;
+import net.minecraft.util.Util;
+import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.crash.CrashException;
 import net.minecraft.util.crash.CrashReport;
 import net.minecraft.util.crash.CrashReportSection;
@@ -34,13 +37,17 @@ import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.Queue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -92,6 +99,9 @@ public class MinecraftClientMixin {
         return null;
     }
 
+    @Unique
+    public final Object integratedResourceManagerLock = new Object();
+
     @Shadow
     private void method_29601(MinecraftClient.WorldLoadAction worldLoadAction, String string, boolean bl, Runnable runnable) {
     }
@@ -99,6 +109,7 @@ public class MinecraftClientMixin {
     @Shadow
     private void startIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction) {
     }
+
 
     @Inject(method = "startIntegratedServer(Ljava/lang/String;Lnet/minecraft/util/registry/RegistryTracker$Modifiable;Ljava/util/function/Function;Lcom/mojang/datafixers/util/Function4;ZLnet/minecraft/client/MinecraftClient$WorldLoadAction;)V", at = @At("HEAD"), cancellable = true)
     private void replaceStartIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction, CallbackInfo info) {
@@ -184,6 +195,31 @@ public class MinecraftClientMixin {
             } catch (IOException var17) {
                 LOGGER.warn((String) "Failed to unlock access to level {}", (Object) worldName, (Object) var17);
             }
+        }
+        info.cancel();
+    }
+
+    @Inject(method = "method_29604", at = @At("HEAD"), cancellable = true)
+    public void replaceCreateResourceManager(RegistryTracker.Modifiable modifiable, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean bl, LevelStorage.Session session, CallbackInfoReturnable info) throws InterruptedException, ExecutionException {
+        InstaReset.InstaResetState state = InstaReset.instance().getState();
+        if (state != InstaReset.InstaResetState.STARTING && state != InstaReset.InstaResetState.RUNNING) {
+            return;
+        }
+        DataPackSettings dataPackSettings = (DataPackSettings) function.apply(session);
+        ResourcePackManager resourcePackManager = new ResourcePackManager(ResourcePackProfile::new, new ResourcePackProvider[]{new VanillaDataPackProvider(), new FileResourcePackProvider(session.getDirectory(WorldSavePath.DATAPACKS).toFile(), ResourcePackSource.PACK_SOURCE_WORLD)});
+
+        try {
+            synchronized (this.integratedResourceManagerLock) {
+                DataPackSettings dataPackSettings2 = MinecraftServer.loadDataPacks(resourcePackManager, dataPackSettings, bl);
+                CompletableFuture<ServerResourceManager> completableFuture = ServerResourceManager.reload(resourcePackManager.createResourcePacks(), CommandManager.RegistrationEnvironment.INTEGRATED, 2, Util.getServerWorkerExecutor(), (MinecraftClient) (Object) this);
+                ((MinecraftClient) (Object) this).runTasks(completableFuture::isDone);
+                ServerResourceManager serverResourceManager = (ServerResourceManager) completableFuture.get();
+                SaveProperties saveProperties = (SaveProperties) function4.apply(session, modifiable, serverResourceManager.getResourceManager(), dataPackSettings2);
+                info.setReturnValue(new MinecraftClient.IntegratedResourceManager(resourcePackManager, serverResourceManager, saveProperties));
+            }
+        } catch (ExecutionException | InterruptedException var12) {
+            resourcePackManager.close();
+            throw var12;
         }
         info.cancel();
     }

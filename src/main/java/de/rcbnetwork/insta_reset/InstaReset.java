@@ -143,15 +143,13 @@ public class InstaReset implements ClientModInitializer {
         this.removeExpiredLevelsFromQueue();
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
+            // Cannot be expired, because only just finished initializing!
             PregeneratingLevelFuture future = pollNextLevelFuture();
             if (future == null) {
-                try {
-                    future = createPregeneratingLevel(true);
-                } catch (Exception e) {
-                    log(Level.ERROR, e.getMessage());
+                future = createPregeneratingLevel(true);
+                if (future == null) {
                     this.stop();
                     this.client.method_29970(null);
-                    return;
                 }
             }
             this.currentLevelFuture = future;
@@ -210,6 +208,7 @@ public class InstaReset implements ClientModInitializer {
                 next.set(future);
             }
         });
+        pregeneratingLevelFutureQueue.remove(next.get());
         return next.get();
     }
 
@@ -221,7 +220,7 @@ public class InstaReset implements ClientModInitializer {
             try {
                 removeLevelAsync(future.future.get());
             } catch (Exception e) {
-                log(Level.ERROR, e.getMessage());
+                log(Level.ERROR, String.format("Error stopping level: %s - %s", future.hash, e.getMessage()));
             }
             future = pollNextLevelFuture();
         }
@@ -284,14 +283,18 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("Hash: %s, Expected creation: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
+        return String.format("Hash: %s, Scheduled creation: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
     }
 
     void refillQueueScheduled() {
         for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
             PregeneratingLevelFuture future = createPregeneratingLevel(false);
+            if (future == null) {
+                this.stop();
+                this.client.method_29970(null);
+            }
             this.pregeneratingLevelFutureQueue.offer(future);
-            log(String.format("Scheduled level for : %s", future.hash, future.expectedCreationTimeStamp));
+            log(String.format("Scheduled level %s for %s", future.hash, future.expectedCreationTimeStamp));
         }
 
     }
@@ -313,7 +316,7 @@ public class InstaReset implements ClientModInitializer {
 
     public PregeneratingLevelFuture createPregeneratingLevel(boolean now) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
-        // set delay to a number between 300 and 800 (or to 0 if now is set)
+        // set delay to a number between 300 and 800 ms (or to 0 if now is set)
         long delay = !now ? random.nextInt(501) + 300 : 0;
         long expectedCreationTimeStamp = new Date().getTime() + delay;
         // createLevel() (CreateWorldScreen.java:245)
@@ -334,7 +337,8 @@ public class InstaReset implements ClientModInitializer {
             try {
                 return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo, expireAfterSeconds);
             } catch (Exception e) {
-                this.log(Level.ERROR, e.getMessage());
+                this.log(Level.ERROR, String.format("Pregeneration Initialization failed: %s", seedHash));
+                e.printStackTrace();
                 return null;
             }
         }, delay, TimeUnit.MILLISECONDS);

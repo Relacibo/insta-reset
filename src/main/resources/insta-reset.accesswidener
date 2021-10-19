@@ -1,2 +1,4 @@
 accessWidener v1 named
 accessible class net/minecraft/client/MinecraftClient$WorldLoadAction
+accessible class net/minecraft/client/MinecraftClient$IntegratedResourceManager
+accessible method net/minecraft/client/MinecraftClient$IntegratedResourceManager <init> (Lnet/minecraft/resource/ResourcePackManager;Lnet/minecraft/resource/ServerResourceManager;Lnet/minecraft/world/SaveProperties;)V
