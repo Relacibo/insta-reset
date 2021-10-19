@@ -205,18 +205,22 @@ public class MinecraftClientMixin {
         if (state != InstaReset.InstaResetState.STARTING && state != InstaReset.InstaResetState.RUNNING) {
             return;
         }
+        // MinecraftClient.java:1830
         DataPackSettings dataPackSettings = (DataPackSettings) function.apply(session);
         ResourcePackManager resourcePackManager = new ResourcePackManager(ResourcePackProfile::new, new ResourcePackProvider[]{new VanillaDataPackProvider(), new FileResourcePackProvider(session.getDirectory(WorldSavePath.DATAPACKS).toFile(), ResourcePackSource.PACK_SOURCE_WORLD)});
 
         try {
+            DataPackSettings dataPackSettings2;
+            ServerResourceManager serverResourceManager;
             synchronized (this.integratedResourceManagerLock) {
-                DataPackSettings dataPackSettings2 = MinecraftServer.loadDataPacks(resourcePackManager, dataPackSettings, bl);
+                dataPackSettings2 = MinecraftServer.loadDataPacks(resourcePackManager, dataPackSettings, bl);
                 CompletableFuture<ServerResourceManager> completableFuture = ServerResourceManager.reload(resourcePackManager.createResourcePacks(), CommandManager.RegistrationEnvironment.INTEGRATED, 2, Util.getServerWorkerExecutor(), (MinecraftClient) (Object) this);
                 ((MinecraftClient) (Object) this).runTasks(completableFuture::isDone);
-                ServerResourceManager serverResourceManager = (ServerResourceManager) completableFuture.get();
-                SaveProperties saveProperties = (SaveProperties) function4.apply(session, modifiable, serverResourceManager.getResourceManager(), dataPackSettings2);
-                info.setReturnValue(new MinecraftClient.IntegratedResourceManager(resourcePackManager, serverResourceManager, saveProperties));
+                serverResourceManager = completableFuture.get();
             }
+            SaveProperties saveProperties = (SaveProperties) function4.apply(session, modifiable, serverResourceManager.getResourceManager(), dataPackSettings2);
+            info.setReturnValue(new MinecraftClient.IntegratedResourceManager(resourcePackManager, serverResourceManager, saveProperties));
+
         } catch (ExecutionException | InterruptedException var12) {
             resourcePackManager.close();
             throw var12;

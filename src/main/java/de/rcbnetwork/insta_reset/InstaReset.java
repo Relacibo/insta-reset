@@ -212,7 +212,10 @@ public class InstaReset implements ClientModInitializer {
                 next.set(future);
             }
         });
-        pregeneratingLevelFutureQueue.remove(next.get());
+        PregeneratingLevelFuture level = next.get();
+        if (level != null) {
+            pregeneratingLevelFutureQueue.remove(level);
+        }
         return next.get();
     }
 
