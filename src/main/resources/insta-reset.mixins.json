@@ -4,15 +4,18 @@
   "package": "de.rcbnetwork.insta_reset.mixin",
   "compatibilityLevel": "JAVA_8",
   "mixins": [
-    "ServerChunkManagerMixin",
+    "IntegratedServerMixin",
     "MinecraftServerMixin",
-    "WeightedBlockStateProviderMixin",
-    "IntegratedServerMixin"
+    "ServerChunkManagerMixin",
+    "WeightedBlockStateProviderMixin"
   ],
   "client": [
-    "client/TitleScreenMixin",
-    "client/OptionsScreenMixin",
-    "client/MinecraftClientMixin"
+    "client.LevelLoadingScreenMixin",
+    "client.SaveLevelScreenMixin",
+    "client.MinecraftClientMixin",
+    "client.OptionsScreenMixin",
+    "client.TitleScreenMixin",
+    "client.ProgressScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

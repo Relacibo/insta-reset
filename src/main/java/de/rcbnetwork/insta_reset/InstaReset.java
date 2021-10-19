@@ -6,6 +6,8 @@ import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.resource.DataPackSettings;
+import net.minecraft.text.LiteralText;
+import net.minecraft.text.Text;
 import net.minecraft.util.FileNameUtil;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.world.*;
@@ -14,6 +16,7 @@ import net.minecraft.world.level.LevelInfo;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.Array;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,7 +41,7 @@ public class InstaReset implements ClientModInitializer {
     private Config config;
     private MinecraftClient client;
     private final Random random = new Random();
-    private final ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
+    private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
     private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
 
@@ -50,10 +53,10 @@ public class InstaReset implements ClientModInitializer {
         return this.currentLevel.get();
     }
 
-    private final AtomicReference<String> debugMessage = new AtomicReference<>("");
+    private List<String> debugMessage = Collections.emptyList();
 
-    public String getDebugMessage() {
-        return debugMessage.get();
+    public Iterator<String> getDebugMessage() {
+        return debugMessage.iterator();
     }
 
     private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
@@ -165,7 +168,6 @@ public class InstaReset implements ClientModInitializer {
         }
         this.currentLevelFuture = null;
         this.currentLevel = new AtomicReference<>(next);
-        this.updateDebugMessage();
         this.config.settings.resetCounter++;
         try {
             config.writeChanges();
@@ -173,6 +175,7 @@ public class InstaReset implements ClientModInitializer {
             e.printStackTrace();
         }
         this.refillQueueScheduled();
+        this.updateDebugMessage();
         this.openCurrentLevel();
     }
 
@@ -186,12 +189,13 @@ public class InstaReset implements ClientModInitializer {
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (client.getNetworkHandler() == null) {
+            this.setState(InstaResetState.RUNNING);
             openNextLevel();
         } else if (level != null) {
             ((FlushableServer) (level.server)).setShouldFlush(true);
+            this.setState(InstaResetState.RUNNING);
             refillQueueScheduled();
         }
-        this.setState(InstaResetState.RUNNING);
     }
 
     public void stopAsync() {
@@ -215,6 +219,7 @@ public class InstaReset implements ClientModInitializer {
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
+        this.debugMessage = Collections.emptyList();
         PregeneratingLevelFuture future = pollNextLevelFuture();
         while (future != null) {
             try {
@@ -268,22 +273,21 @@ public class InstaReset implements ClientModInitializer {
         String nextLevelString = this.currentLevelFuture != null ?
                 createDebugStringFromLevelFuture(this.currentLevelFuture) :
                 createDebugStringFromLevel(this.currentLevel.get());
-        nextLevelString = String.format("Next: %s", nextLevelString);
 
         Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevel);
-        List<String> completeList = Stream.concat(Stream.concat(futureStrings, levelStrings), Stream.of(nextLevelString)).collect(Collectors.toList());
-        Collections.reverse(completeList);
-        String res = String.join("\n", completeList);
-        this.debugMessage.set(String.format("%s\n(Now: %s)", res, now));
+        List<String> completeList = Stream.concat(levelStrings, futureStrings).collect(Collectors.toList());
+        completeList.add(0, nextLevelString);
+        completeList.add(String.format("(Now: %s)", now));
+        this.debugMessage = completeList;
     }
 
     private String createDebugStringFromLevel(Pregenerator.PregeneratingLevel level) {
-        return String.format("Hash: %s, Creation: %d", level.hash.substring(0, 10), level.creationTimeStamp);
+        return String.format("%s, Created: %d", level.hash.substring(0, 10), level.creationTimeStamp);
     }
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("Hash: %s, Scheduled creation: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
+        return String.format("%s, Scheduled: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
     }
 
     void refillQueueScheduled() {
@@ -306,7 +310,12 @@ public class InstaReset implements ClientModInitializer {
         ).flatMap(f -> {
             try {
                 pregeneratingLevelFutureQueue.remove(f);
-                return Stream.of(f.future.get());
+                Pregenerator.PregeneratingLevel level = f.future.get();
+                if (level == null) {
+                    log(Level.ERROR, String.format("Pregeneration failed, result was null: %s", f.hash));
+                    return Stream.empty();
+                }
+                return Stream.of(level);
             } catch (Exception e) {
                 log(Level.ERROR, String.format("Pregeneration failed: %s", f.hash));
                 return Stream.empty();
@@ -318,7 +327,7 @@ public class InstaReset implements ClientModInitializer {
     public PregeneratingLevelFuture createPregeneratingLevel(boolean now) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
         // set delay to a number between 300 and 800 ms (or to 0 if now is set)
-        long delay = !now ? random.nextInt(501) + 300 : 0;
+        long delay = !now ? random.nextInt(2000) + 500 : 0;
         long expectedCreationTimeStamp = new Date().getTime() + delay;
         // createLevel() (CreateWorldScreen.java:245)
         String levelName = this.generateLevelName();

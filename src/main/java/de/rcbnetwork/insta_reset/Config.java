@@ -33,6 +33,7 @@ public class Config {
         public int resetCounter = 0;
         public int numberOfPregeneratingLevels = 1;
         public int expireAfterSeconds = 280;
+        public boolean showStatusList = true;
     }
 
     private static final Gson GSON = new GsonBuilder()
