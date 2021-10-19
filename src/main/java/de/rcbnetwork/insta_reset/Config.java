@@ -32,7 +32,7 @@ public class Config {
         public Difficulty difficulty = Difficulty.EASY;
         public int resetCounter = 0;
         public int numberOfPregeneratingLevels = 1;
-        public int expireAfterSeconds = 295;
+        public int expireAfterSeconds = 280;
     }
 
     private static final Gson GSON = new GsonBuilder()

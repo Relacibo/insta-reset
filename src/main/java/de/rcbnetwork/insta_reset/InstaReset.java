@@ -1,12 +1,11 @@
 package de.rcbnetwork.insta_reset;
 
+import com.google.common.collect.Queues;
 import com.google.common.hash.Hashing;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.resource.DataPackSettings;
-import net.minecraft.text.LiteralText;
 import net.minecraft.util.FileNameUtil;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.world.*;
@@ -16,9 +15,11 @@ import net.minecraft.world.level.LevelInfo;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -36,11 +37,23 @@ public class InstaReset implements ClientModInitializer {
     private static final Logger logger = LogManager.getLogger();
     private Config config;
     private MinecraftClient client;
-    private Queue<AtomicReference<Pregenerator.PregeneratingLevel>> pregeneratingLevelQueue = new LinkedBlockingQueue<>();
+    private Random random = new Random();
+    private ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
+    private Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
+    private Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
+
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
+    private PregeneratingLevelFuture currentLevelFuture = null;
+
 
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
         return this.currentLevel.get();
+    }
+
+    private AtomicReference<String> debugMessage = new AtomicReference<>("");
+
+    public String getDebugMessage() {
+        return debugMessage.get();
     }
 
     private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
@@ -87,6 +100,18 @@ public class InstaReset implements ClientModInitializer {
         }
     }
 
+    public static final class PregeneratingLevelFuture {
+        public final String hash;
+        public final long expectedCreationTimeStamp;
+        public final Future<Pregenerator.PregeneratingLevel> future;
+
+        public PregeneratingLevelFuture(String hash, long creationTimeStamp, Future<Pregenerator.PregeneratingLevel> future) {
+            this.hash = hash;
+            this.expectedCreationTimeStamp = creationTimeStamp;
+            this.future = future;
+        }
+    }
+
     public boolean isModRunning() {
         return state.get() == InstaResetState.RUNNING;
     }
@@ -107,29 +132,54 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private void removeExpiredLevelsFromQueue() {
-        this.pregeneratingLevelQueue.stream().filter((elem) -> isLevelExpired(elem.get())).forEach((elem) -> {
+        this.pregeneratingLevelQueue.stream().filter((elem) -> isLevelExpired(elem)).forEach((elem) -> {
             this.pregeneratingLevelQueue.remove(elem);
             removeLevelAsync(elem);
         });
     }
 
-    private AtomicReference<Pregenerator.PregeneratingLevel> pollFromPregeneratingLevelQueue() {
-        removeExpiredLevelsFromQueue();
-        AtomicReference<Pregenerator.PregeneratingLevel> next = pregeneratingLevelQueue.poll();
+    public void openNextLevel() {
+        this.transferFinishedFutures();
+        this.removeExpiredLevelsFromQueue();
+        Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
-            Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-            if (level == null) {
-                return null;
+            PregeneratingLevelFuture future = pollNextLevelFuture();
+            if (future == null) {
+                try {
+                    future = createPregeneratingLevel(true);
+                } catch (Exception e) {
+                    log(Level.ERROR, e.getMessage());
+                    this.stop();
+                    this.client.method_29970(null);
+                    return;
+                }
             }
-            next = new AtomicReference<>(level);
+            this.currentLevelFuture = future;
+            this.updateDebugMessage();
+            try {
+                next = future.future.get();
+            } catch (Exception e) {
+                log(Level.ERROR, e.getMessage());
+                this.stop();
+                this.client.method_29970(null);
+                return;
+            }
         }
-        return next;
+        this.currentLevelFuture = null;
+        this.currentLevel = new AtomicReference<>(next);
+        this.updateDebugMessage();
+        this.config.settings.resetCounter++;
+        try {
+            config.writeChanges();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        this.refillQueueScheduled();
+        this.openCurrentLevel();
     }
 
     public void startAsync() {
-        Thread thread = new Thread(() -> {
-            start();
-        });
+        Thread thread = new Thread(this::start);
         thread.start();
     }
 
@@ -138,74 +188,74 @@ public class InstaReset implements ClientModInitializer {
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (client.getNetworkHandler() == null) {
-            level = tryCreatePregeneratingLevel();
-            if (level == null) {
-                this.stop();
-                log(Level.ERROR, "Cannot generate new level");
-                return;
-            }
-            this.config.settings.resetCounter++;
-            try {
-                config.writeChanges();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            refillQueueAsync();
-            openLevel(new AtomicReference<>(level));
-        } else {
+            openNextLevel();
+        } else if (level != null) {
             ((FlushableServer) (level.server)).setShouldFlush(true);
-            refillQueueAsync();
+            refillQueueScheduled();
         }
         this.setState(InstaResetState.RUNNING);
     }
 
     public void stopAsync() {
-        Thread thread = new Thread(() -> {
-            stop();
-        });
+        Thread thread = new Thread(this::stop);
         thread.start();
+    }
+
+    public PregeneratingLevelFuture pollNextLevelFuture() {
+        AtomicLong min = new AtomicLong(Long.MAX_VALUE);
+        AtomicReference<PregeneratingLevelFuture> next = new AtomicReference<>();
+        pregeneratingLevelFutureQueue.forEach((future) -> {
+            if (future.expectedCreationTimeStamp < min.get()) {
+                min.set(future.expectedCreationTimeStamp);
+                next.set(future);
+            }
+        });
+        return next.get();
     }
 
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
-        AtomicReference<Pregenerator.PregeneratingLevel> reference = pregeneratingLevelQueue.poll();
-        while (reference != null) {
-            removeLevelAsync(reference);
-            reference = pregeneratingLevelQueue.poll();
+        PregeneratingLevelFuture future = pollNextLevelFuture();
+        while (future != null) {
+            try {
+                removeLevelAsync(future.future.get());
+            } catch (Exception e) {
+                log(Level.ERROR, e.getMessage());
+            }
+            future = pollNextLevelFuture();
         }
-        Pregenerator.PregeneratingLevel level = currentLevel.get();
+        Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
+        while (level != null) {
+            removeLevelAsync(level);
+            level = pregeneratingLevelQueue.poll();
+        }
+        level = currentLevel.get();
         if (level != null) {
             ((FlushableServer) (level.server)).setShouldFlush(false);
-            this.currentLevel.set(null);
         }
         this.setState(InstaResetState.STOPPED);
     }
 
-    private void removeLevelAsync(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+    private void removeLevelAsync(Pregenerator.PregeneratingLevel level) {
         Thread thread = new Thread(() -> {
-            removeLevel(reference);
+            removeLevel(level);
         });
         thread.start();
     }
 
-    private void removeLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
+    private void removeLevel(Pregenerator.PregeneratingLevel level) {
         try {
-            Pregenerator.PregeneratingLevel level = reference.get();
             log(String.format("Removing Level: %s", level.hash));
-            Pregenerator.uninitialize(this.client, reference.get());
+            Pregenerator.uninitialize(this.client, level);
         } catch (IOException e) {
             log(Level.ERROR, "Cannot close Session");
-        } finally {
-            reference.set(null);
         }
     }
 
-    public void openLevel(AtomicReference<Pregenerator.PregeneratingLevel> reference) {
-        this.client.method_29970(new SaveLevelScreen(new LiteralText("InstaReset - Opening next level")));
-        Pregenerator.PregeneratingLevel level = reference.get();
+    public void openCurrentLevel() {
+        Pregenerator.PregeneratingLevel level = currentLevel.get();
         log(String.format("Opening level: %s", level.hash));
-        this.currentLevel = reference;
         String fileName = level.fileName;
         LevelInfo levelInfo = level.levelInfo;
         GeneratorOptions generatorOptions = level.generatorOptions;
@@ -214,56 +264,58 @@ public class InstaReset implements ClientModInitializer {
         this.client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
     }
 
-    void refillQueueAsync() {
-        Thread thread = new Thread(() -> {
-            for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
-                Pregenerator.PregeneratingLevel level = tryCreatePregeneratingLevel();
-                if (level == null) {
-                    this.stop();
-                    log(Level.ERROR, "Cannot generate new level");
-                    return;
-                }
-                this.pregeneratingLevelQueue.offer(new AtomicReference<>(level));
-                log(String.format("Queued level: %s", level.hash));
-            }
-        });
-        thread.start();
+    private void updateDebugMessage() {
+        long now = new Date().getTime();
+        String nextLevelString = this.currentLevelFuture != null ?
+                createDebugStringFromLevelFuture(this.currentLevelFuture) :
+                createDebugStringFromLevel(this.currentLevel.get());
+        nextLevelString = String.format("Next: %s", nextLevelString);
+
+        Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
+        Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevel);
+        List<String> completeList = Stream.concat(Stream.concat(futureStrings, levelStrings), Stream.of(nextLevelString)).collect(Collectors.toList());
+        Collections.reverse(completeList);
+        String res = String.join("\n", completeList);
+        this.debugMessage.set(String.format("%s\n(Now: %s)", res, now));
     }
 
-
-    public void openNextLevel() {
-        AtomicReference<Pregenerator.PregeneratingLevel> reference = this.pollFromPregeneratingLevelQueue();
-        if (reference == null) {
-            this.stop();
-            this.client.method_29970(null);
-            return;
-        }
-        this.config.settings.resetCounter++;
-        try {
-            config.writeChanges();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        refillQueueAsync();
-        openLevel(reference);
+    private String createDebugStringFromLevel(Pregenerator.PregeneratingLevel level) {
+        return String.format("Hash: %s, Creation: %d", level.hash.substring(0, 10), level.creationTimeStamp);
     }
 
-    public Pregenerator.PregeneratingLevel tryCreatePregeneratingLevel() {
-        for (int failCounter = 0; true; failCounter++) {
+    private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
+        return String.format("Hash: %s, Expected creation: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
+    }
+
+    void refillQueueScheduled() {
+        for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
+            PregeneratingLevelFuture future = createPregeneratingLevel(false);
+            this.pregeneratingLevelFutureQueue.offer(future);
+            log(String.format("Scheduled level for : %s", future.hash, future.expectedCreationTimeStamp));
+        }
+
+    }
+
+    private void transferFinishedFutures() {
+        pregeneratingLevelFutureQueue.stream().filter(f ->
+                f.future.isDone()
+        ).flatMap(f -> {
             try {
-                return createPregeneratingLevel();
+                pregeneratingLevelFutureQueue.remove(f);
+                return Stream.of(f.future.get());
             } catch (Exception e) {
-                if (failCounter == 5) {
-                    return null;
-                }
-                failCounter++;
+                log(Level.ERROR, String.format("Pregeneration failed: %s", f.hash));
+                return Stream.empty();
             }
-        }
+        }).sorted(Comparator.comparingLong(level -> level.creationTimeStamp)
+        ).forEach(pregeneratingLevelQueue::offer);
     }
 
-    public Pregenerator.PregeneratingLevel createPregeneratingLevel() throws IOException, ExecutionException, InterruptedException {
+    public PregeneratingLevelFuture createPregeneratingLevel(boolean now) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
-        long expirationTimeStamp = expireAfterSeconds != -1 ? new Date().getTime() + expireAfterSeconds * 1000L : 0;
+        // set delay to a number between 300 and 800 (or to 0 if now is set)
+        long delay = !now ? random.nextInt(501) + 300 : 0;
+        long expectedCreationTimeStamp = new Date().getTime() + delay;
         // createLevel() (CreateWorldScreen.java:245)
         String levelName = this.generateLevelName();
         // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
@@ -276,7 +328,17 @@ public class InstaReset implements ClientModInitializer {
         String fileName = this.generateFileName(levelName, seedHash);
         // MoreOptionsDialog:79+326
         RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
-        return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo, expirationTimeStamp);
+
+        // Schedule the task. If the level is needed right now, the delay is set to 0, otherwise there is a random delay (for performance reasons).
+        Future<Pregenerator.PregeneratingLevel> future = service.schedule(() -> {
+            try {
+                return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo, expireAfterSeconds);
+            } catch (Exception e) {
+                this.log(Level.ERROR, e.getMessage());
+                return null;
+            }
+        }, delay, TimeUnit.MILLISECONDS);
+        return new PregeneratingLevelFuture(seedHash, expectedCreationTimeStamp, future);
     }
 
     private String generateLevelName() {
@@ -285,7 +347,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String generateFileName(String levelName, String seedHash) {
-        String fileName = String.format("%s - %s", levelName, seedHash.substring(0, 7));
+        String fileName = String.format("%s - %s", levelName, seedHash.substring(0, 10));
         // Ensure its a unique name (CreateWorldScreen.java:222)
         try {
             fileName = FileNameUtil.getNextUniqueName(this.client.getLevelStorage().getSavesDirectory(), fileName, "");

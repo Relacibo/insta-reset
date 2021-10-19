@@ -184,7 +184,6 @@ public class MinecraftClientMixin {
             } catch (IOException var17) {
                 LOGGER.warn((String) "Failed to unlock access to level {}", (Object) worldName, (Object) var17);
             }
-
         }
         info.cancel();
     }

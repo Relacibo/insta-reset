@@ -33,6 +33,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Date;
 import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -43,7 +44,9 @@ public class Pregenerator {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo, long expirationTimeStamp) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo, long expireAfterSeconds) throws IOException, ExecutionException, InterruptedException {
+        long creationTimeStamp = new Date().getTime();
+        long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
         // method_29605 (MinecraftClient.java:1645) + startIntegratedServer (MinecraftClient.java:1658)
         Function<LevelStorage.Session, DataPackSettings> function = (session) -> {
             return levelInfo.method_29558();
@@ -117,15 +120,12 @@ public class Pregenerator {
             });
         });
         // Fast-Reset: don't save when closing the server.
-        ((FlushableServer) (server)).setShouldFlush(true);
-        return new PregeneratingLevel(hash, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+        ((FlushableServer) server).setShouldFlush(true);
+        return new PregeneratingLevel(hash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
     public static void uninitialize(MinecraftClient client, PregeneratingLevel level) throws IOException {
         level.server.stop(true);
-        level.renderTaskQueue.set(null);
-        level.worldGenerationProgressTracker.set(null);
-        level.integratedResourceManager.close();
         // WorldListWidget.java:323
         LevelStorage levelStorage = client.getLevelStorage();
         try {
@@ -161,6 +161,8 @@ public class Pregenerator {
 
         public final String hash;
 
+        public final long creationTimeStamp;
+
         public final long expirationTimeStamp;
 
         public final String fileName;
@@ -185,8 +187,9 @@ public class Pregenerator {
 
         public final UserCache userCache;
 
-        public PregeneratingLevel(String hash, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+        public PregeneratingLevel(String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
             this.hash = hash;
+            this.creationTimeStamp = creationTimeStamp;
             this.expirationTimeStamp = expirationTimeStamp;
             this.fileName = fileName;
             this.levelInfo = levelInfo;
