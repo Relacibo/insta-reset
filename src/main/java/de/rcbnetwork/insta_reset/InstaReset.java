@@ -37,10 +37,10 @@ public class InstaReset implements ClientModInitializer {
     private static final Logger logger = LogManager.getLogger();
     private Config config;
     private MinecraftClient client;
-    private Random random = new Random();
-    private ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
-    private Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
-    private Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
+    private final Random random = new Random();
+    private final ScheduledExecutorService service = Executors.newScheduledThreadPool(2);
+    private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
+    private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
 
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private PregeneratingLevelFuture currentLevelFuture = null;
@@ -50,14 +50,14 @@ public class InstaReset implements ClientModInitializer {
         return this.currentLevel.get();
     }
 
-    private AtomicReference<String> debugMessage = new AtomicReference<>("");
+    private final AtomicReference<String> debugMessage = new AtomicReference<>("");
 
     public String getDebugMessage() {
         return debugMessage.get();
     }
 
-    private AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
-    private List<StateListener> stateListeners = new ArrayList<>();
+    private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
+    private final List<StateListener> stateListeners = new ArrayList<>();
 
     public void addStateListener(StateListener listener) {
         stateListeners.add(listener);
@@ -292,6 +292,7 @@ public class InstaReset implements ClientModInitializer {
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
+                return;
             }
             this.pregeneratingLevelFutureQueue.offer(future);
             log(String.format("Scheduled level %s for %s", future.hash, future.expectedCreationTimeStamp));
@@ -337,7 +338,7 @@ public class InstaReset implements ClientModInitializer {
             try {
                 return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo, expireAfterSeconds);
             } catch (Exception e) {
-                this.log(Level.ERROR, String.format("Pregeneration Initialization failed: %s", seedHash));
+                log(Level.ERROR, String.format("Pregeneration Initialization failed: %s", seedHash));
                 e.printStackTrace();
                 return null;
             }
