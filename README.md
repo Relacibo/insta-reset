@@ -1,10 +1,10 @@
 # InstaReset
-Fabric mod for really fast single instance resetting in Minecraft: Java Edition Speedrunning.
+Fabric mod for really fast single instance resetting in Minecraft: Java Edition Speedrunning. 
 
 Replaces [fast-reset](https://github.com/jan-leila/FastReset) and [Auto-Reset-Mod](https://github.com/DuncanRuns/AutoResetMod) and uses some code of fast-reset for optionally flushing the Minecraft Server. Instead of one integrated server loaded at a time, with this mod multiple servers will be loaded concurrently, which will speed up world resets significantly.
 
 ## Installation
-Install [fabric](https://fabricmc.net/). Move the jar file into the minecraft mods folder (%Appdata%\.minecraft\mods). If present, remove Fast-Reset and AutoResetMod!
+Install [fabric](https://fabricmc.net/). Move the jar file into the minecraft mods folder (`%Appdata%\.minecraft\mods`). If present, **remove Fast-Reset and AutoResetMod!**
 
 ## Configuration
 When the mod first is executed, a config file *insta-reset.json* will be created. There are the following options:
