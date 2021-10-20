@@ -83,7 +83,7 @@ public class Config {
             this.settings.expireAfterSeconds = -1;
         }
         int size = this.pastLevelInfoQueue.size();
-        while (size >= 5) {
+        while (size > 5) {
             this.pastLevelInfoQueue.remove();
             size--;
         }
