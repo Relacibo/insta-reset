@@ -82,6 +82,11 @@ public class Config {
         if (this.settings.expireAfterSeconds <= 0) {
             this.settings.expireAfterSeconds = -1;
         }
+        int size = this.pastLevelInfoQueue.size();
+        while (size >= 5) {
+            this.pastLevelInfoQueue.remove();
+            size--;
+        }
     }
 
     public void writeChanges() throws IOException {

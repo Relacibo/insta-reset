@@ -212,8 +212,10 @@ public class InstaReset implements ClientModInitializer {
         if (client.getNetworkHandler() == null) {
             this.setState(InstaResetState.RUNNING);
             openNextLevel();
-        } else if (level != null) {
-            ((FlushableServer) (level.server)).setShouldFlush(true);
+        } else {
+            if (level != null) {
+                ((FlushableServer) (level.server)).setShouldFlush(true);
+            }
             this.setState(InstaResetState.RUNNING);
             refillQueueScheduled();
         }
@@ -235,7 +237,8 @@ public class InstaReset implements ClientModInitializer {
             } catch (Exception e) {
                 log(Level.ERROR, String.format("Error stopping level: %s - %s", future.hash, e.getMessage()));
             }
-            future = pregeneratingLevelFutureQueue.poll();;
+            future = pregeneratingLevelFutureQueue.poll();
+            ;
         }
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
         while (level != null) {
