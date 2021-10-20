@@ -58,25 +58,8 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
-    private final List<StateListener> stateListeners = new ArrayList<>();
-
-    public void addStateListener(StateListener listener) {
-        stateListeners.add(listener);
-    }
-
-    public void removeStateListener(StateListener listener) {
-        stateListeners.remove(listener);
-    }
 
     private void setState(InstaResetState state) {
-        InstaResetState oldState = this.state.get();
-        if (this.state.get() == state) {
-            return;
-        }
-        InstaResetStateChangedEvent event = new InstaResetStateChangedEvent(oldState, state);
-        stateListeners.forEach((listener) -> {
-            listener.update(event);
-        });
         this.state.set(state);
     }
 
@@ -85,10 +68,6 @@ public class InstaReset implements ClientModInitializer {
         RUNNING,
         STOPPING,
         STOPPED
-    }
-
-    public interface StateListener {
-        void update(InstaResetStateChangedEvent event);
     }
 
     public boolean isModRunning() {
@@ -264,7 +243,6 @@ public class InstaReset implements ClientModInitializer {
                 log(Level.ERROR, String.format("Error stopping level: %s - %s", future.hash, e.getMessage()));
             }
             future = pregeneratingLevelFutureQueue.poll();
-            ;
         }
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
         while (level != null) {
@@ -420,16 +398,6 @@ public class InstaReset implements ClientModInitializer {
 
     public static void log(Level level, String message) {
         logger.log(level, "[" + MOD_NAME + "] " + message);
-    }
-
-    public static final class InstaResetStateChangedEvent {
-        public final InstaResetState oldState;
-        public final InstaResetState newState;
-
-        public InstaResetStateChangedEvent(InstaResetState oldState, InstaResetState newState) {
-            this.oldState = oldState;
-            this.newState = newState;
-        }
     }
 
     public static final class PregeneratingLevelFuture {

@@ -13,7 +13,6 @@
   "client": [
     "client.LevelLoadingScreenMixin",
     "client.MinecraftClientMixin",
-    "client.OptionsScreenMixin",
     "client.ProgressScreenMixin",
     "client.SaveLevelScreenMixin",
     "client.TitleScreenMixin",
