@@ -376,15 +376,15 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String createDebugStringFromPastLevel(PastLevelInfo info) {
-        return String.format("%s, Created: %d", info.hash.substring(0, 10), info.creationTimeStamp);
+        return String.format("%s, C: %d", info.hash.substring(0, 10), info.creationTimeStamp);
     }
 
     private String createDebugStringFromLevelInfo(Pregenerator.PregeneratingLevel level) {
-        return String.format("%s, Created: %d", level.hash.substring(0, 10), level.creationTimeStamp);
+        return String.format("%s, C: %d", level.hash.substring(0, 10), level.creationTimeStamp);
     }
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("%s, Scheduled: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
+        return String.format("%s, S: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
     }
 
     public static void log(String message) {

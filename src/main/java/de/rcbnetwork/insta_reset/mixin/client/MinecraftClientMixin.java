@@ -35,9 +35,7 @@ import net.minecraft.world.level.LevelInfo;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.Shadow;
-import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -54,44 +52,50 @@ import java.util.function.Function;
 @Mixin(MinecraftClient.class)
 public class MinecraftClientMixin {
 
+    @Mutable
+    @Final
     @Shadow
-    AtomicReference<WorldGenerationProgressTracker> worldGenProgressTracker;
+    private AtomicReference<WorldGenerationProgressTracker> worldGenProgressTracker;
+
+    @Mutable
+    @Final
+    @Shadow
+    private
+    Queue<Runnable> renderTaskQueue;
 
     @Shadow
-    Queue renderTaskQueue;
+    private IntegratedServer server;
 
     @Shadow
-    IntegratedServer server;
+    private boolean isIntegratedServerRunning;
 
     @Shadow
-    boolean isIntegratedServerRunning;
+    private Profiler profiler;
 
     @Shadow
-    Profiler profiler;
+    private CrashReport crashReport;
 
     @Shadow
-    CrashReport crashReport;
+    private ClientConnection connection;
 
     @Shadow
-    ClientConnection connection;
-
-    @Shadow
-    void disconnect() {
+    public void disconnect() {
     }
 
     @Shadow
-    void openScreen(@Nullable Screen screen) {
+    public void openScreen(@Nullable Screen screen) {
+    }
+
+    @Final
+    @Shadow
+    private static Logger LOGGER;
+
+    @Shadow
+    private void render(boolean tick) {
     }
 
     @Shadow
-    static Logger LOGGER;
-
-    @Shadow
-    void render(boolean tick) {
-    }
-
-    @Shadow
-    static void printCrashReport(CrashReport crashReport) {
+    public static void printCrashReport(CrashReport crashReport) {
     }
 
     @Shadow

@@ -23,7 +23,7 @@ public class MinecraftServerMixin implements FlushableServer {
     protected LevelStorage.Session session;
 
     @Unique
-    private AtomicReference<Boolean> _shouldFlush = new AtomicReference<>(false);
+    private final AtomicReference<Boolean> _shouldFlush = new AtomicReference<>(false);
 
     @Override
     public boolean shouldFlush() {

@@ -16,7 +16,7 @@ import java.util.function.BooleanSupplier;
 @Mixin(IntegratedServer.class)
 public class IntegratedServerMixin implements InitiallyHibernatingServer {
     @Shadow
-    boolean paused;
+    private boolean paused;
 
     @Unique
     AtomicReference<Boolean> hibernating = new AtomicReference<>(InstaReset.instance().isModRunning());
