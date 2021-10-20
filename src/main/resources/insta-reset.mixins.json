@@ -16,7 +16,8 @@
     "client.OptionsScreenMixin",
     "client.ProgressScreenMixin",
     "client.SaveLevelScreenMixin",
-    "client.TitleScreenMixin"
+    "client.TitleScreenMixin",
+    "client.GameMenuScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -97,6 +97,22 @@ public class InstaReset implements ClientModInitializer {
         return this.state.get();
     }
 
+    public boolean isCurrentServerShouldFlush() {
+        Pregenerator.PregeneratingLevel level = this.currentLevel.get();
+        if (level == null) {
+            return false;
+        }
+        return ((FlushableServer)level.server).shouldFlush();
+    }
+
+    public void setCurrentServerShouldFlush(boolean shouldFlush) {
+        Pregenerator.PregeneratingLevel level = this.currentLevel.get();
+        if (level == null) {
+            return;
+        }
+        ((FlushableServer)level.server).setShouldFlush(shouldFlush);
+    }
+
     @Override
     public void onInitializeClient() {
         this.config = Config.load();
@@ -184,9 +200,6 @@ public class InstaReset implements ClientModInitializer {
             this.setState(InstaResetState.RUNNING);
             openNextLevel();
         } else {
-            if (level != null) {
-                ((FlushableServer) (level.server)).setShouldFlush(true);
-            }
             this.setState(InstaResetState.RUNNING);
             refillQueueScheduled();
         }

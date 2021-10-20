@@ -21,14 +21,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(OptionsScreen.class)
 public class OptionsScreenMixin extends Screen {
     @Unique
-    final Text QUIT_BUTTON_MESSAGE = new LiteralText("Save & Quit");
-    @Unique
     final Text STOP_RESETTING_MESSAGE = new LiteralText("Stop Resetting");
     @Unique
     final Text START_RESETTING_MESSAGE = new LiteralText("Start Resetting");
-
-    @Unique
-    ButtonWidget quitButton;
 
     @Unique
     ButtonWidget toggleModButton;
@@ -36,38 +31,12 @@ public class OptionsScreenMixin extends Screen {
     @Unique
     InstaReset.StateListener instaResetStateListener;
 
-    @Shadow
-    Screen parent;
-
     protected OptionsScreenMixin(Text title) {
         super(title);
     }
 
     @Inject(method = "init", at = @At("TAIL"))
     private void extendInit(CallbackInfo info) {
-        //Add button to disable the auto reset and quit
-        quitButton = this.addButton(new ButtonWidget(0, this.height - 44, 100, 20, QUIT_BUTTON_MESSAGE, (buttonWidget) -> {
-            InstaReset.instance().stop();
-            boolean bl = this.client.isInSingleplayer();
-            boolean bl2 = this.client.isConnectedToRealms();
-            buttonWidget.active = false;
-            this.client.world.disconnect();
-            if (bl) {
-                this.client.disconnect(new SaveLevelScreen(new TranslatableText("menu.savingLevel")));
-            } else {
-                this.client.disconnect();
-            }
-
-            if (bl) {
-                this.client.openScreen(new TitleScreen());
-            } else if (bl2) {
-                RealmsBridge realmsBridge = new RealmsBridge();
-                realmsBridge.switchToRealms(new TitleScreen());
-            } else {
-                this.client.openScreen(new MultiplayerScreen(new TitleScreen()));
-            }
-        }));
-
         toggleModButton = this.addButton(new ButtonWidget(0, this.height - 20, 100, 20, LiteralText.EMPTY, (buttonWidget) -> {
             buttonWidget.active = false;
             if (InstaReset.instance().isModRunning()) {
@@ -94,16 +63,13 @@ public class OptionsScreenMixin extends Screen {
         Text message = state == InstaReset.InstaResetState.RUNNING ? STOP_RESETTING_MESSAGE : START_RESETTING_MESSAGE;
         switch (state) {
             case RUNNING:
-                quitButton.active = true;
                 toggleModButton.active = true;
                 break;
             case STARTING:
             case STOPPING:
-                quitButton.active = false;
                 toggleModButton.active = false;
                 break;
             case STOPPED:
-                quitButton.active = false;
                 toggleModButton.active = true;
                 break;
         }
