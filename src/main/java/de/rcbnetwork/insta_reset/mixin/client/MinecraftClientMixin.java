@@ -38,6 +38,7 @@ import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.*;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -46,6 +47,7 @@ import java.net.SocketAddress;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
@@ -202,13 +204,13 @@ public class MinecraftClientMixin {
     }
 
     @Inject(method = "method_29604", at = @At("HEAD"), cancellable = true)
-    public void replaceCreateResourceManager(RegistryTracker.Modifiable modifiable, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean bl, LevelStorage.Session session, CallbackInfoReturnable info) throws InterruptedException, ExecutionException {
+    public void replaceCreateResourceManager(RegistryTracker.Modifiable modifiable, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean bl, LevelStorage.Session session, CallbackInfoReturnable<MinecraftClient.IntegratedResourceManager> info) throws InterruptedException, ExecutionException {
         if (!InstaReset.instance().isModRunning()) {
             return;
         }
         // MinecraftClient.java:1830
         DataPackSettings dataPackSettings = (DataPackSettings) function.apply(session);
-        ResourcePackManager resourcePackManager = new ResourcePackManager(ResourcePackProfile::new, new ResourcePackProvider[]{new VanillaDataPackProvider(), new FileResourcePackProvider(session.getDirectory(WorldSavePath.DATAPACKS).toFile(), ResourcePackSource.PACK_SOURCE_WORLD)});
+        ResourcePackManager<ResourcePackProfile> resourcePackManager = new ResourcePackManager<>(ResourcePackProfile::new, new ResourcePackProvider[]{new VanillaDataPackProvider(), new FileResourcePackProvider(session.getDirectory(WorldSavePath.DATAPACKS).toFile(), ResourcePackSource.PACK_SOURCE_WORLD)});
 
         try {
             DataPackSettings dataPackSettings2;
@@ -229,6 +231,12 @@ public class MinecraftClientMixin {
         info.cancel();
     }
 
+    @Redirect(method = "disconnect(Lnet/minecraft/client/gui/screen/Screen;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/MinecraftClient;cancelTasks()V"))
+    public void redirectCancelTasks(MinecraftClient instance) {
+        Future<Void> marker = ((MinecraftClient)(Object)this).submit(() -> {});
+        ((MinecraftClient)(Object)this).runTasks(marker::isDone);
+    }
+
     // From Fast-Reset-Mod
     @Inject(method = "method_29607", at = @At("HEAD"))
     public void worldWait(String worldName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, CallbackInfo ci) {
@@ -237,6 +245,5 @@ public class MinecraftClientMixin {
                 System.out.println("done waiting for save lock");
             }
         }
-
     }
 }

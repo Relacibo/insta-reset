@@ -47,14 +47,15 @@ public abstract class ThreadExecutorMixin<R extends Runnable> implements Message
             info.setReturnValue(ret);
         }
     }*/
-    @Inject(method = "cancelTasks", at = @At("HEAD"), cancellable = true)
+    /*@Inject(method = "cancelTasks", at = @At("HEAD"), cancellable = true)
     private void extendCancelTasks(CallbackInfo info) {
         if (!InstaReset.instance().isModRunning()) {
             return;
         }
-        this.runTasks(() -> true);
+        this.runTasks();
+
         info.cancel();
-    }
+    }*/
 
     @Inject(method = "runTasks(Ljava/util/function/BooleanSupplier;)V", at = @At("HEAD"), cancellable = true)
     private void replaceRunTasks(BooleanSupplier stopCondition, CallbackInfo info) {

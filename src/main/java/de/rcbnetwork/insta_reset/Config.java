@@ -85,8 +85,6 @@ public class Config {
         }
         if (this.settings.cleanupIntervalSeconds <= 0) {
             this.settings.cleanupIntervalSeconds = -1;
-        } else if (this.settings.cleanupIntervalSeconds < 10) {
-            this.settings.cleanupIntervalSeconds = 10;
         }
         int size = this.pastLevelInfoQueue.size();
         while (size > 5) {

@@ -53,7 +53,7 @@ public class InstaReset implements ClientModInitializer {
     private List<String> debugMessage = Collections.emptyList();
 
     public Iterator<String> getDebugMessage() {
-        return debugMessage.iterator();
+        return debugMessage.stream().iterator();
     }
 
     private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
