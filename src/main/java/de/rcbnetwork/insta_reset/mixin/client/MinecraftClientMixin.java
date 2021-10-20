@@ -233,7 +233,7 @@ public class MinecraftClientMixin {
 
     @Redirect(method = "disconnect(Lnet/minecraft/client/gui/screen/Screen;)V", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/MinecraftClient;cancelTasks()V"))
     public void redirectCancelTasks(MinecraftClient instance) {
-        Future<Void> marker = CompletableFuture.supplyAsync(() -> null, ((MinecraftClient)(Object)this));
+        Future<Void> marker = ((MinecraftClient)(Object)this).submit(() -> null);
         ((MinecraftClient)(Object)this).runTasks(marker::isDone);
     }
 
