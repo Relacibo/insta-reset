@@ -89,38 +89,6 @@ public class InstaReset implements ClientModInitializer {
         void update(InstaResetStateChangedEvent event);
     }
 
-    public static final class InstaResetStateChangedEvent {
-        public final InstaResetState oldState;
-        public final InstaResetState newState;
-
-        public InstaResetStateChangedEvent(InstaResetState oldState, InstaResetState newState) {
-            this.oldState = oldState;
-            this.newState = newState;
-        }
-    }
-
-    public static final class PregeneratingLevelFuture {
-        public final String hash;
-        public final long expectedCreationTimeStamp;
-        public final Future<Pregenerator.PregeneratingLevel> future;
-
-        public PregeneratingLevelFuture(String hash, long expectedCreationTimeStamp, Future<Pregenerator.PregeneratingLevel> future) {
-            this.hash = hash;
-            this.expectedCreationTimeStamp = expectedCreationTimeStamp;
-            this.future = future;
-        }
-    }
-
-    public static final class PastLevelInfo {
-        public final String hash;
-        public final long creationTimeStamp;
-
-        public PastLevelInfo(String hash, long creationTimeStamp) {
-            this.hash = hash;
-            this.creationTimeStamp = creationTimeStamp;
-        }
-    }
-
     public boolean isModRunning() {
         return state.get() == InstaResetState.RUNNING;
     }
@@ -283,7 +251,8 @@ public class InstaReset implements ClientModInitializer {
     }
 
     void refillQueueScheduled() {
-        for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
+        int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
+        for (int i = size; i < this.config.settings.numberOfPregeneratingLevels; i++) {
             // Put each initialization a bit apart
             PregeneratingLevelFuture future = createPregeneratingLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
             if (future == null) {
@@ -395,6 +364,38 @@ public class InstaReset implements ClientModInitializer {
 
     public static void log(Level level, String message) {
         logger.log(level, "[" + MOD_NAME + "] " + message);
+    }
+
+    public static final class InstaResetStateChangedEvent {
+        public final InstaResetState oldState;
+        public final InstaResetState newState;
+
+        public InstaResetStateChangedEvent(InstaResetState oldState, InstaResetState newState) {
+            this.oldState = oldState;
+            this.newState = newState;
+        }
+    }
+
+    public static final class PregeneratingLevelFuture {
+        public final String hash;
+        public final long expectedCreationTimeStamp;
+        public final Future<Pregenerator.PregeneratingLevel> future;
+
+        public PregeneratingLevelFuture(String hash, long expectedCreationTimeStamp, Future<Pregenerator.PregeneratingLevel> future) {
+            this.hash = hash;
+            this.expectedCreationTimeStamp = expectedCreationTimeStamp;
+            this.future = future;
+        }
+    }
+
+    public static final class PastLevelInfo {
+        public final String hash;
+        public final long creationTimeStamp;
+
+        public PastLevelInfo(String hash, long creationTimeStamp) {
+            this.hash = hash;
+            this.creationTimeStamp = creationTimeStamp;
+        }
     }
 }
 

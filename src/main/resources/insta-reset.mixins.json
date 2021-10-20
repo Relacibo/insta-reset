@@ -7,15 +7,16 @@
     "IntegratedServerMixin",
     "MinecraftServerMixin",
     "ServerChunkManagerMixin",
+    "ThreadExecutorMixin",
     "WeightedBlockStateProviderMixin"
   ],
   "client": [
     "client.LevelLoadingScreenMixin",
-    "client.SaveLevelScreenMixin",
     "client.MinecraftClientMixin",
     "client.OptionsScreenMixin",
-    "client.TitleScreenMixin",
-    "client.ProgressScreenMixin"
+    "client.ProgressScreenMixin",
+    "client.SaveLevelScreenMixin",
+    "client.TitleScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

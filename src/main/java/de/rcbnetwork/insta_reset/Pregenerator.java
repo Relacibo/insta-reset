@@ -105,7 +105,7 @@ public class Pregenerator {
         //UserCache.setUseRemote(false);
 
         // MinecraftClient.java:351
-        final AtomicReference<Queue> renderTaskQueue = new AtomicReference<>(Queues.newConcurrentLinkedQueue());
+        final Queue<Runnable> renderTaskQueue = Queues.newConcurrentLinkedQueue();
         // loadWorld (MinecraftServer.java:314)
         final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker = new AtomicReference<>();
         //  startIntegratedServer (MinecraftClient.java:1704)
@@ -114,7 +114,7 @@ public class Pregenerator {
                 WorldGenerationProgressTracker wgpt = new WorldGenerationProgressTracker(i + 0);
                 worldGenerationProgressTracker.set(wgpt);
                 wgpt.start();
-                Queue rtg = renderTaskQueue.get();
+                Queue rtg = renderTaskQueue;
                 rtg.getClass();
                 return new QueueingWorldGenerationProgressListener(wgpt, rtg::add);
             });
@@ -181,13 +181,13 @@ public class Pregenerator {
 
         public final IntegratedServer server;
 
-        public final AtomicReference<Queue> renderTaskQueue;
+        public final Queue<Runnable> renderTaskQueue;
 
         public final MinecraftSessionService minecraftSessionService;
 
         public final UserCache userCache;
 
-        public PregeneratingLevel(String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, AtomicReference<Queue> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+        public PregeneratingLevel(String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, Queue<Runnable> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
             this.hash = hash;
             this.creationTimeStamp = creationTimeStamp;
             this.expirationTimeStamp = expirationTimeStamp;

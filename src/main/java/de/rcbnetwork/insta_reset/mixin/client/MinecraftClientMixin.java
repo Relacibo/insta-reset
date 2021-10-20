@@ -52,7 +52,6 @@ import java.util.function.Function;
 @Mixin(MinecraftClient.class)
 public class MinecraftClientMixin {
 
-    @Mutable
     @Final
     @Shadow
     private AtomicReference<WorldGenerationProgressTracker> worldGenProgressTracker;
@@ -131,7 +130,6 @@ public class MinecraftClientMixin {
         boolean bl2 = saveProperties.method_29588() != Lifecycle.stable();
         if (worldLoadAction == MinecraftClient.WorldLoadAction.NONE || !bl && !bl2) {
             this.disconnect();
-            this.worldGenProgressTracker = currentLevel.worldGenerationProgressTracker;
 
             try {
                 //session2.method_27425(registryTracker, saveProperties);
@@ -143,7 +141,7 @@ public class MinecraftClientMixin {
                 SkullBlockEntity.setUserCache(currentLevel.userCache);
                 SkullBlockEntity.setSessionService(currentLevel.minecraftSessionService);
                 UserCache.setUseRemote(false);
-                this.renderTaskQueue = currentLevel.renderTaskQueue.get();
+                this.renderTaskQueue = currentLevel.renderTaskQueue;
                 this.server = currentLevel.server;
                 this.isIntegratedServerRunning = true;
             } catch (Throwable var19) {
@@ -154,9 +152,10 @@ public class MinecraftClientMixin {
                 throw new CrashException(crashReport);
             }
 
-            while (this.worldGenProgressTracker.get() == null) {
+            while (currentLevel.worldGenerationProgressTracker.get() == null) {
                 Thread.yield();
             }
+            this.worldGenProgressTracker.set(currentLevel.worldGenerationProgressTracker.get());
 
             ((InitiallyHibernatingServer) this.server).wakeUp();
             if (!this.server.isLoading()) {

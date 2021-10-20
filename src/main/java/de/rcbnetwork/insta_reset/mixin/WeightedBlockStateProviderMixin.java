@@ -17,7 +17,7 @@ import java.util.Random;
 @Mixin(WeightedBlockStateProvider.class)
 public class WeightedBlockStateProviderMixin {
     @Unique
-    final Object statesLock = new Object();
+    private final Object statesLock = new Object();
 
     @Final
     @Shadow
@@ -25,7 +25,6 @@ public class WeightedBlockStateProviderMixin {
 
     @Inject(method = "getBlockState(Ljava/util/Random;Lnet/minecraft/util/math/BlockPos;)Lnet/minecraft/block/BlockState;", at = @At("HEAD"), cancellable = true)
     public void replaceGetBlockState(Random random, BlockPos pos, CallbackInfoReturnable<BlockState> info) {
-        // We need to ensure, that pickRandom is only called once at a time, because it actually mutates this.states.
         synchronized (statesLock) {
             info.setReturnValue((BlockState) this.states.pickRandom(random));
         }
