@@ -283,7 +283,7 @@ public class InstaReset implements ClientModInitializer {
     void refillQueueScheduled() {
         for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
             // Put each initialization a bit apart
-            PregeneratingLevelFuture future = createPregeneratingLevel((long) i * config.settings.timeBetweenStartsMs);
+            PregeneratingLevelFuture future = createPregeneratingLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
@@ -361,12 +361,12 @@ public class InstaReset implements ClientModInitializer {
         String nextLevelString = this.currentLevelFuture != null ?
                 createDebugStringFromLevelFuture(this.currentLevelFuture) :
                 createDebugStringFromLevelInfo(this.currentLevel.get());
-        nextLevelString = String.format("%s (next)", nextLevelString);
-        String currentTimeStamp = String.format("Now: %s", now);
+        nextLevelString = String.format("%s <-", nextLevelString);
+        String currentTimeStamp = String.format("Time: %s", now);
 
         Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevelInfo);
-        Stream<String> pastStrings = this.config.pastLevelInfoQueue.stream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s (past)", s));
+        Stream<String> pastStrings = this.config.pastLevelInfoQueue.stream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s", s));
         this.debugMessage = Stream.of(pastStrings,
                 Stream.of(nextLevelString),
                 levelStrings,
@@ -376,15 +376,15 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String createDebugStringFromPastLevel(PastLevelInfo info) {
-        return String.format("%s, C: %d", info.hash.substring(0, 10), info.creationTimeStamp);
+        return String.format("%s:%dc", info.hash.substring(0, 10), info.creationTimeStamp);
     }
 
     private String createDebugStringFromLevelInfo(Pregenerator.PregeneratingLevel level) {
-        return String.format("%s, C: %d", level.hash.substring(0, 10), level.creationTimeStamp);
+        return String.format("%s:%dc", level.hash.substring(0, 10), level.creationTimeStamp);
     }
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("%s, S: %d", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
+        return String.format("%s:%ds", future.hash.substring(0, 10), future.expectedCreationTimeStamp);
     }
 
     public static void log(String message) {
