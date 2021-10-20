@@ -141,7 +141,8 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private void removeExpiredLevelsFromQueue() {
-        this.pregeneratingLevelQueue.stream().filter((elem) -> isLevelExpired(elem)).forEach((elem) -> {
+        this.pregeneratingLevelQueue.stream().filter(this::isLevelExpired).forEach((elem) -> {
+            log(String.format("Removing expired level: %s, %s", elem.hash, elem.expirationTimeStamp));
             this.pregeneratingLevelQueue.remove(elem);
             removeLevelAsync(elem);
         });
@@ -166,7 +167,7 @@ public class InstaReset implements ClientModInitializer {
         this.removeExpiredLevelsFromQueue();
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
-            // Cannot be expired, because only just finished initializing!
+            // Cannot be expired!
             PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
             if (future == null) {
                 future = createPregeneratingLevel(0);
@@ -282,7 +283,7 @@ public class InstaReset implements ClientModInitializer {
     void refillQueueScheduled() {
         for (int i = pregeneratingLevelQueue.size(); i < this.config.settings.numberOfPregeneratingLevels; i++) {
             // Put each initialization a bit apart
-            PregeneratingLevelFuture future = createPregeneratingLevel(i * config.settings.timeBetweenStartsMs);
+            PregeneratingLevelFuture future = createPregeneratingLevel((long) i * config.settings.timeBetweenStartsMs);
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
@@ -337,8 +338,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String generateLevelName() {
-        String levelName = String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size() + 1);
-        return levelName;
+        return String.format("Speedrun #%d", this.config.settings.resetCounter + pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size() + 1);
     }
 
     private String generateFileName(String levelName, String seedHash) {
