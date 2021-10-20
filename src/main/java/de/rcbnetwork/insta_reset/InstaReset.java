@@ -161,7 +161,7 @@ public class InstaReset implements ClientModInitializer {
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
             // Cannot be expired, because only just finished initializing!
-            PregeneratingLevelFuture future = pollNextLevelFuture();
+            PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
             if (future == null) {
                 future = createPregeneratingLevel(0);
                 if (future == null) {
@@ -218,34 +218,18 @@ public class InstaReset implements ClientModInitializer {
         thread.start();
     }
 
-    public PregeneratingLevelFuture pollNextLevelFuture() {
-        AtomicLong min = new AtomicLong(Long.MAX_VALUE);
-        AtomicReference<PregeneratingLevelFuture> next = new AtomicReference<>();
-        pregeneratingLevelFutureQueue.forEach((future) -> {
-            if (future.expectedCreationTimeStamp < min.get()) {
-                min.set(future.expectedCreationTimeStamp);
-                next.set(future);
-            }
-        });
-        PregeneratingLevelFuture level = next.get();
-        if (level != null) {
-            pregeneratingLevelFutureQueue.remove(level);
-        }
-        return next.get();
-    }
-
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
         this.debugMessage = Collections.emptyList();
-        PregeneratingLevelFuture future = pollNextLevelFuture();
+        PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
         while (future != null) {
             try {
                 removeLevelAsync(future.future.get());
             } catch (Exception e) {
                 log(Level.ERROR, String.format("Error stopping level: %s - %s", future.hash, e.getMessage()));
             }
-            future = pollNextLevelFuture();
+            future = pregeneratingLevelFutureQueue.poll();;
         }
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
         while (level != null) {
