@@ -46,7 +46,6 @@ public class InstaReset implements ClientModInitializer {
 
     private boolean standbyMode = false;
 
-
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
         return this.currentLevel.get();
     }
@@ -71,7 +70,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public boolean isModRunning() {
-        return state.get() == InstaResetState.RUNNING;
+        return state.get() == InstaResetState.STARTING || state.get() == InstaResetState.RUNNING;
     }
 
     public InstaResetState getState() {

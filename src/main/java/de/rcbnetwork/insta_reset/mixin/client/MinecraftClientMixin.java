@@ -116,8 +116,7 @@ public class MinecraftClientMixin {
 
     @Inject(method = "startIntegratedServer(Ljava/lang/String;Lnet/minecraft/util/registry/RegistryTracker$Modifiable;Ljava/util/function/Function;Lcom/mojang/datafixers/util/Function4;ZLnet/minecraft/client/MinecraftClient$WorldLoadAction;)V", at = @At("HEAD"), cancellable = true)
     private void replaceStartIntegratedServer(String worldName, RegistryTracker.Modifiable registryTracker, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean safeMode, MinecraftClient.WorldLoadAction worldLoadAction, CallbackInfo info) {
-        InstaReset.InstaResetState state = InstaReset.instance().getState();
-        if (state != InstaReset.InstaResetState.STARTING && state != InstaReset.InstaResetState.RUNNING) {
+        if (!InstaReset.instance().isModRunning()) {
             return;
         }
         // MinecraftClient.java:1659
@@ -204,8 +203,7 @@ public class MinecraftClientMixin {
 
     @Inject(method = "method_29604", at = @At("HEAD"), cancellable = true)
     public void replaceCreateResourceManager(RegistryTracker.Modifiable modifiable, Function<LevelStorage.Session, DataPackSettings> function, Function4<LevelStorage.Session, RegistryTracker.Modifiable, ResourceManager, DataPackSettings, SaveProperties> function4, boolean bl, LevelStorage.Session session, CallbackInfoReturnable info) throws InterruptedException, ExecutionException {
-        InstaReset.InstaResetState state = InstaReset.instance().getState();
-        if (state != InstaReset.InstaResetState.STARTING && state != InstaReset.InstaResetState.RUNNING) {
+        if (!InstaReset.instance().isModRunning()) {
             return;
         }
         // MinecraftClient.java:1830
