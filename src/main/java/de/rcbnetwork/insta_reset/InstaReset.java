@@ -104,7 +104,7 @@ public class InstaReset implements ClientModInitializer {
         if (level == null) {
             return false;
         }
-        return ((FlushableServer)level.server).shouldFlush();
+        return ((FlushableServer) level.server).shouldFlush();
     }
 
     public void setCurrentServerShouldFlush(boolean shouldFlush) {
@@ -112,7 +112,7 @@ public class InstaReset implements ClientModInitializer {
         if (level == null) {
             return;
         }
-        ((FlushableServer)level.server).setShouldFlush(shouldFlush);
+        ((FlushableServer) level.server).setShouldFlush(shouldFlush);
     }
 
     @Override
@@ -152,9 +152,8 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void openNextLevel() {
-        boolean cleanupRan = false;
         if (this.config.settings.cleanupIntervalSeconds != -1) {
-            cleanupRan = cancelScheduledCleanup();
+            cancelScheduledCleanup();
         }
         Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
@@ -163,15 +162,13 @@ public class InstaReset implements ClientModInitializer {
                 this.config.pastLevelInfoQueue.remove();
             }
         }
-        if (!cleanupRan) {
-            try {
-                this.cleanup(false);
-            } catch (Exception e) {
-                e.printStackTrace();
-                log(Level.ERROR, e.getMessage());
-                this.stop();
-                return;
-            }
+        try {
+            this.cleanup(false);
+        } catch (Exception e) {
+            e.printStackTrace();
+            log(Level.ERROR, e.getMessage());
+            this.stop();
+            return;
         }
         this.standbyMode = false;
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
@@ -213,35 +210,23 @@ public class InstaReset implements ClientModInitializer {
         this.openCurrentLevel();
     }
 
-    private boolean cancelScheduledCleanup() {
+    private void cancelScheduledCleanup() {
         if (cleanupFuture == null) {
-            return true;
+            return;
         }
-        boolean cancelled = cleanupFuture.cancel(false);
-        if (cancelled) {
-            return false;
-        }
-        try {
-            cleanupFuture.get();
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        } catch (ExecutionException e) {
-            e.printStackTrace();
-        }
-        return true;
+        cleanupFuture.cancel(false);
     }
 
     private void scheduleCleanup() {
-        this.cleanupFuture = service.schedule(() -> {
+        this.cleanupFuture = service.scheduleAtFixedRate(() -> {
             try {
                 this.cleanup(true);
-                scheduleCleanup();
             } catch (Exception e) {
                 e.printStackTrace();
                 log(Level.ERROR, e.getMessage());
                 this.stop();
             }
-        },this.config.settings.cleanupIntervalSeconds, TimeUnit.SECONDS);
+        }, this.config.settings.cleanupIntervalSeconds, this.config.settings.cleanupIntervalSeconds, TimeUnit.SECONDS);
     }
 
     public void startAsync() {
@@ -322,7 +307,7 @@ public class InstaReset implements ClientModInitializer {
 
     void refillQueueScheduled() {
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
-        int maxLevels = standbyMode ? 2 : this.config.settings.numberOfPregeneratingLevels;
+        int maxLevels = standbyMode ? 1 : this.config.settings.numberOfPregeneratingLevels;
         for (int i = size; i < maxLevels; i++) {
             // Put each initialization a bit apart
             PregeneratingLevelFuture future = schedulePregenerationOfLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
