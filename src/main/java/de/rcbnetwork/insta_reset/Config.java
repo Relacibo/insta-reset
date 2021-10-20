@@ -37,6 +37,7 @@ public class Config {
         public int resetCounter = 0;
         public int numberOfPregeneratingLevels = 1;
         public int expireAfterSeconds = 280;
+        public int cleanupIntervalSeconds = 60;
         public boolean showStatusList = true;
         public int timeBetweenStartsMs = 1000;
     }
@@ -81,6 +82,11 @@ public class Config {
         }
         if (this.settings.expireAfterSeconds <= 0) {
             this.settings.expireAfterSeconds = -1;
+        }
+        if (this.settings.cleanupIntervalSeconds <= 0) {
+            this.settings.cleanupIntervalSeconds = -1;
+        } else if (this.settings.cleanupIntervalSeconds < 10) {
+            this.settings.cleanupIntervalSeconds = 10;
         }
         int size = this.pastLevelInfoQueue.size();
         while (size > 5) {

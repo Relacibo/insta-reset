@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -27,6 +26,7 @@ import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
     private static InstaReset _instance;
+    private ScheduledFuture<?> cleanupFuture;
 
     public static InstaReset instance() {
         return _instance;
@@ -43,6 +43,8 @@ public class InstaReset implements ClientModInitializer {
 
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private PregeneratingLevelFuture currentLevelFuture = null;
+
+    private boolean standbyMode = false;
 
 
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
@@ -124,15 +126,36 @@ public class InstaReset implements ClientModInitializer {
         return level.expirationTimeStamp < new Date().getTime();
     }
 
-    private void removeExpiredLevelsFromQueue() {
-        this.pregeneratingLevelQueue.stream().filter(this::isLevelExpired).forEach((elem) -> {
+    private int removeExpiredLevelsFromQueue() {
+        return this.pregeneratingLevelQueue.stream().filter(this::isLevelExpired).map((elem) -> {
             log(String.format("Removing expired level: %s, %s", elem.hash, elem.expirationTimeStamp));
             this.pregeneratingLevelQueue.remove(elem);
             removeLevelAsync(elem);
-        });
+            return 1;
+        }).reduce(0, Integer::sum);
+    }
+
+    private synchronized void cleanup(boolean refill) throws Exception {
+        this.transferFinishedFutures();
+        if (config.settings.expireAfterSeconds != -1) {
+            int removed = this.removeExpiredLevelsFromQueue();
+            if (removed > 0) {
+                this.standbyMode = true;
+            }
+        }
+        if (refill) {
+            this.refillQueueScheduled();
+            if (config.settings.showStatusList) {
+                this.updateDebugMessage();
+            }
+        }
     }
 
     public void openNextLevel() {
+        boolean cleanupRan = false;
+        if (this.config.settings.cleanupIntervalSeconds != -1) {
+            cleanupRan = cancelScheduledCleanup();
+        }
         Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
             this.config.pastLevelInfoQueue.offer(new PastLevelInfo(pastLevel.hash, pastLevel.creationTimeStamp));
@@ -140,23 +163,23 @@ public class InstaReset implements ClientModInitializer {
                 this.config.pastLevelInfoQueue.remove();
             }
         }
-        try {
-            this.transferFinishedFutures();
-        } catch (Exception e) {
-            e.printStackTrace();
-            log(Level.ERROR, e.getMessage());
-            this.stop();
-            return;
+        if (!cleanupRan) {
+            try {
+                this.cleanup(false);
+            } catch (Exception e) {
+                e.printStackTrace();
+                log(Level.ERROR, e.getMessage());
+                this.stop();
+                return;
+            }
         }
-        if (config.settings.expireAfterSeconds != -1) {
-            this.removeExpiredLevelsFromQueue();
-        }
+        this.standbyMode = false;
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
             // Cannot be expired!
             PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
             if (future == null) {
-                future = createPregeneratingLevel(0);
+                future = schedulePregenerationOfLevel(0);
                 if (future == null) {
                     this.stop();
                     this.client.method_29970(null);
@@ -184,7 +207,41 @@ public class InstaReset implements ClientModInitializer {
         if (config.settings.showStatusList) {
             this.updateDebugMessage();
         }
+        if (this.config.settings.cleanupIntervalSeconds != -1) {
+            this.scheduleCleanup();
+        }
         this.openCurrentLevel();
+    }
+
+    private boolean cancelScheduledCleanup() {
+        if (cleanupFuture == null) {
+            return true;
+        }
+        boolean cancelled = cleanupFuture.cancel(false);
+        if (cancelled) {
+            return false;
+        }
+        try {
+            cleanupFuture.get();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+        return true;
+    }
+
+    private void scheduleCleanup() {
+        this.cleanupFuture = service.schedule(() -> {
+            try {
+                this.cleanup(true);
+                scheduleCleanup();
+            } catch (Exception e) {
+                e.printStackTrace();
+                log(Level.ERROR, e.getMessage());
+                this.stop();
+            }
+        },this.config.settings.cleanupIntervalSeconds, TimeUnit.SECONDS);
     }
 
     public void startAsync() {
@@ -265,9 +322,10 @@ public class InstaReset implements ClientModInitializer {
 
     void refillQueueScheduled() {
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
-        for (int i = size; i < this.config.settings.numberOfPregeneratingLevels; i++) {
+        int maxLevels = standbyMode ? 2 : this.config.settings.numberOfPregeneratingLevels;
+        for (int i = size; i < maxLevels; i++) {
             // Put each initialization a bit apart
-            PregeneratingLevelFuture future = createPregeneratingLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
+            PregeneratingLevelFuture future = schedulePregenerationOfLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
@@ -292,7 +350,7 @@ public class InstaReset implements ClientModInitializer {
         }
     }
 
-    public PregeneratingLevelFuture createPregeneratingLevel(long delayInMs) {
+    public PregeneratingLevelFuture schedulePregenerationOfLevel(long delayInMs) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
         long expectedCreationTimeStamp = new Date().getTime() + delayInMs;
         // createLevel() (CreateWorldScreen.java:245)
