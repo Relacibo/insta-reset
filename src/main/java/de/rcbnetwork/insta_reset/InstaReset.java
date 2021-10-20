@@ -2,6 +2,7 @@ package de.rcbnetwork.insta_reset;
 
 import com.google.common.collect.Queues;
 import com.google.common.hash.Hashing;
+import com.google.gson.Gson;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
@@ -25,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
+    private final Gson GSON = new Gson();
     private static InstaReset _instance;
     private ScheduledFuture<?> cleanupFuture;
 
@@ -214,6 +216,7 @@ public class InstaReset implements ClientModInitializer {
 
     public void start() {
         log("Starting!");
+        log(GSON.toJson(config.settings));
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (client.getNetworkHandler() == null) {
@@ -249,8 +252,16 @@ public class InstaReset implements ClientModInitializer {
             level = pregeneratingLevelQueue.poll();
         }
         level = currentLevel.get();
-        if (level != null) {
-            ((FlushableServer) (level.server)).setShouldFlush(false);
+        if (level != null && (this.config.pastLevelInfoQueue.isEmpty() || level.hash != this.config.pastLevelInfoQueue.peek().hash)) {
+            config.pastLevelInfoQueue.offer(new PastLevelInfo(level.hash, level.creationTimeStamp));
+            if (this.config.pastLevelInfoQueue.size() > 5) {
+                this.config.pastLevelInfoQueue.remove();
+            }
+            try {
+                config.writeChanges();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
         this.setState(InstaResetState.STOPPED);
     }
@@ -367,6 +378,7 @@ public class InstaReset implements ClientModInitializer {
                 createDebugStringFromLevelInfo(this.currentLevel.get());
         nextLevelString = String.format("%s <-", nextLevelString);
         String currentTimeStamp = String.format("Time: %s", Long.toHexString(now));
+        String configString = createSettingsDebugString();
 
         Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevelInfo);
@@ -375,7 +387,8 @@ public class InstaReset implements ClientModInitializer {
                 Stream.of(nextLevelString),
                 levelStrings,
                 futureStrings,
-                Stream.of(currentTimeStamp)
+                Stream.of(currentTimeStamp),
+                Stream.of(configString)
         ).flatMap(stream -> stream).collect(Collectors.toList());
     }
 
@@ -389,6 +402,13 @@ public class InstaReset implements ClientModInitializer {
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
         return String.format("%s:%ss", future.hash.substring(0, 10), Long.toHexString(future.expectedCreationTimeStamp));
+    }
+
+    private String createSettingsDebugString() {
+        Difficulty difficulty = config.settings.difficulty;
+        int resetCounter = config.settings.resetCounter;
+        int expireAfterSeconds = config.settings.expireAfterSeconds;
+        return String.format("%s:%d:%d", difficulty.getName().charAt(0), resetCounter, expireAfterSeconds);
     }
 
     public static void log(String message) {
