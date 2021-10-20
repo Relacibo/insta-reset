@@ -7,7 +7,9 @@ import java.io.IOException;
 import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Queue;
 
+import com.google.common.collect.Queues;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.Difficulty;
 import org.apache.logging.log4j.LogManager;
@@ -27,6 +29,8 @@ public class Config {
     public String getFileName() {
         return this.configPath.getFileName().toString();
     }
+
+    public final Queue<InstaReset.PastLevelInfo> pastLevelInfoQueue = Queues.newConcurrentLinkedQueue();
 
     public static class Settings {
         public Difficulty difficulty = Difficulty.EASY;

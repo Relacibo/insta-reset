@@ -31,6 +31,11 @@ public class IntegratedServerMixin implements InitiallyHibernatingServer {
         hibernating.set(false);
     }
 
+    @Inject(method = "<init>", at = @At("TAIL"))
+    void extendInit(CallbackInfo info) {
+        this.paused = hibernating.get();
+    }
+
     @Inject(method = "tick(Ljava/util/function/BooleanSupplier;)V", at = @At(value = "INVOKE_ASSIGN", target = "Lnet/minecraft/server/integrated/IntegratedServer;getProfiler()Lnet/minecraft/util/profiler/Profiler;", shift = At.Shift.BEFORE))
     void addHibernation(BooleanSupplier shouldKeepTicking, CallbackInfo info) {
         this.paused = hibernating.get() || this.paused;

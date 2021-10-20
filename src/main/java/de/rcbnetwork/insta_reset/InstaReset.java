@@ -40,7 +40,6 @@ public class InstaReset implements ClientModInitializer {
     private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
     private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
-    private final Queue<PastLevelInfo> pastLevelInfoQueue = Queues.newConcurrentLinkedQueue();
 
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private PregeneratingLevelFuture currentLevelFuture = null;
@@ -151,12 +150,19 @@ public class InstaReset implements ClientModInitializer {
     public void openNextLevel() {
         Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
-            this.pastLevelInfoQueue.offer(new PastLevelInfo(pastLevel.hash, pastLevel.creationTimeStamp));
-            if (this.pastLevelInfoQueue.size() > 5) {
-                this.pastLevelInfoQueue.remove();
+            this.config.pastLevelInfoQueue.offer(new PastLevelInfo(pastLevel.hash, pastLevel.creationTimeStamp));
+            if (this.config.pastLevelInfoQueue.size() > 5) {
+                this.config.pastLevelInfoQueue.remove();
             }
         }
-        this.transferFinishedFutures();
+        try {
+            this.transferFinishedFutures();
+        } catch (Exception e) {
+            e.printStackTrace();
+            log(Level.ERROR, e.getMessage());
+            this.stop();
+            return;
+        }
         this.removeExpiredLevelsFromQueue();
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
@@ -285,24 +291,17 @@ public class InstaReset implements ClientModInitializer {
 
     }
 
-    private void transferFinishedFutures() {
-        pregeneratingLevelFutureQueue.stream().filter(f ->
-                f.future.isDone()
-        ).flatMap(f -> {
-            try {
-                pregeneratingLevelFutureQueue.remove(f);
-                Pregenerator.PregeneratingLevel level = f.future.get();
-                if (level == null) {
-                    log(Level.ERROR, String.format("Pregeneration failed, result was null: %s", f.hash));
-                    return Stream.empty();
-                }
-                return Stream.of(level);
-            } catch (Exception e) {
-                log(Level.ERROR, String.format("Pregeneration failed: %s", f.hash));
-                return Stream.empty();
+    private void transferFinishedFutures() throws Exception {
+        PregeneratingLevelFuture peek = pregeneratingLevelFutureQueue.peek();
+        while (peek != null && peek.future.isDone()) {
+            Pregenerator.PregeneratingLevel level;
+            level = pregeneratingLevelFutureQueue.poll().future.get();
+            if (level == null) {
+                throw new NullPointerException(String.format("Pregeneration failed, result was null: %s", peek.hash));
             }
-        }).sorted(Comparator.comparingLong(level -> level.creationTimeStamp)
-        ).forEach(pregeneratingLevelQueue::offer);
+            pregeneratingLevelQueue.offer(level);
+            peek = pregeneratingLevelFutureQueue.peek();
+        }
     }
 
     public PregeneratingLevelFuture createPregeneratingLevel(long delayInMs) {
@@ -364,7 +363,7 @@ public class InstaReset implements ClientModInitializer {
 
         Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevelInfo);
-        Stream<String> pastStrings = pastLevelInfoQueue.stream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s (past)", s));
+        Stream<String> pastStrings = this.config.pastLevelInfoQueue.stream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s (past)", s));
         this.debugMessage = Stream.of(pastStrings,
                 Stream.of(nextLevelString),
                 levelStrings,
