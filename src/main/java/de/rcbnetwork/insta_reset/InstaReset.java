@@ -164,7 +164,9 @@ public class InstaReset implements ClientModInitializer {
             this.stop();
             return;
         }
-        this.removeExpiredLevelsFromQueue();
+        if (config.settings.expireAfterSeconds != -1) {
+            this.removeExpiredLevelsFromQueue();
+        }
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
             // Cannot be expired!
@@ -362,7 +364,7 @@ public class InstaReset implements ClientModInitializer {
                 createDebugStringFromLevelFuture(this.currentLevelFuture) :
                 createDebugStringFromLevelInfo(this.currentLevel.get());
         nextLevelString = String.format("%s <-", nextLevelString);
-        String currentTimeStamp = String.format("Time: %s", now);
+        String currentTimeStamp = String.format("Time: %s", Long.toHexString(now));
 
         Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevelInfo);
