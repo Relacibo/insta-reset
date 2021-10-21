@@ -37,12 +37,14 @@ public class InstaReset implements ClientModInitializer {
     private static final Logger logger = LogManager.getLogger();
     private Config config;
     private MinecraftClient client;
-    private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
+    private final ScheduledExecutorService service = Executors.newScheduledThreadPool(1);
     private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
 
     private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private PregeneratingLevelFuture currentLevelFuture = null;
+
+    private long lastScheduledWorldCreation = 0;
 
     private boolean standbyMode = false;
 
@@ -186,6 +188,7 @@ public class InstaReset implements ClientModInitializer {
                 if (future == null) {
                     this.stop();
                     this.client.method_29970(null);
+                    return;
                 }
             }
             this.currentLevelFuture = future;
@@ -293,9 +296,11 @@ public class InstaReset implements ClientModInitializer {
     void refillQueueScheduled() {
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
         int maxLevels = standbyMode ? this.config.settings.numberOfPregenLevelsInStandby : this.config.settings.numberOfPregenLevels;
+        long now = new Date().getTime();
+        long base = Math.max(lastScheduledWorldCreation, now) - now;
         for (int i = size; i < maxLevels; i++) {
             // Put each initialization a bit apart
-            PregeneratingLevelFuture future = schedulePregenerationOfLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);
+            PregeneratingLevelFuture future = schedulePregenerationOfLevel(base + ((long)i + 1) * config.settings.timeBetweenStartsMs, now);
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
@@ -308,8 +313,12 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public PregeneratingLevelFuture schedulePregenerationOfLevel(long delayInMs) {
+        return schedulePregenerationOfLevel(delayInMs, new Date().getTime());
+    }
+
+    public PregeneratingLevelFuture schedulePregenerationOfLevel(long delayInMs, long now) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
-        long expectedCreationTimeStamp = new Date().getTime() + delayInMs;
+        this.lastScheduledWorldCreation = now + delayInMs;
         // createLevel() (CreateWorldScreen.java:245)
         String levelName = this.generateLevelName();
         // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
@@ -324,7 +333,7 @@ public class InstaReset implements ClientModInitializer {
         RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
 
         // Schedule the task. If the level is needed right now, the delay is set to 0, otherwise there is a delay specified in the config file.
-        Future<Pregenerator.PregeneratingLevel> future = service.schedule(() -> {
+        ScheduledFuture<Pregenerator.PregeneratingLevel> future = service.schedule(() -> {
             try {
                 return Pregenerator.pregenerate(client, seedHash, fileName, generatorOptions, registryTracker, levelInfo, expireAfterSeconds);
             } catch (Exception e) {
@@ -333,7 +342,7 @@ public class InstaReset implements ClientModInitializer {
                 return null;
             }
         }, delayInMs, TimeUnit.MILLISECONDS);
-        return new PregeneratingLevelFuture(seedHash, expectedCreationTimeStamp, future);
+        return new PregeneratingLevelFuture(seedHash, this.lastScheduledWorldCreation, future);
     }
 
     private String generateLevelName() {
@@ -417,9 +426,9 @@ public class InstaReset implements ClientModInitializer {
     public static final class PregeneratingLevelFuture {
         public final String hash;
         public final long expectedCreationTimeStamp;
-        public final Future<Pregenerator.PregeneratingLevel> future;
+        public final ScheduledFuture<Pregenerator.PregeneratingLevel> future;
 
-        public PregeneratingLevelFuture(String hash, long expectedCreationTimeStamp, Future<Pregenerator.PregeneratingLevel> future) {
+        public PregeneratingLevelFuture(String hash, long expectedCreationTimeStamp, ScheduledFuture<Pregenerator.PregeneratingLevel> future) {
             this.hash = hash;
             this.expectedCreationTimeStamp = expectedCreationTimeStamp;
             this.future = future;
