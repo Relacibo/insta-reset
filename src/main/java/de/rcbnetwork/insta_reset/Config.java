@@ -16,8 +16,6 @@ import com.google.gson.stream.JsonToken;
 import com.google.gson.stream.JsonWriter;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.Difficulty;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -46,8 +44,7 @@ public class Config {
             if (!in.peek().equals(JsonToken.STRING)) {
                 return null;
             }
-            String difficultyString = in.nextString();
-            return Difficulty.byName(difficultyString);
+            return Difficulty.byName(in.nextString());
         }
     }
 
