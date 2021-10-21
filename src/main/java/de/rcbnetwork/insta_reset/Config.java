@@ -10,6 +10,10 @@ import java.nio.file.Path;
 import java.util.Queue;
 
 import com.google.common.collect.Queues;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.world.Difficulty;
 import org.apache.logging.log4j.LogManager;
@@ -21,7 +25,6 @@ import com.google.gson.GsonBuilder;
 public class Config {
     private static final String FILE_NAME = "insta-reset.json";
     private Path configPath;
-    private static final Logger LOGGER = LogManager.getLogger();
 
 
     public final Settings settings = new Settings();
@@ -31,6 +34,22 @@ public class Config {
     }
 
     public final Queue<InstaReset.PastLevelInfo> pastLevelInfoQueue = Queues.newConcurrentLinkedQueue();
+
+   static class DifficultyTypeAdapter extends TypeAdapter<Difficulty> {
+        @Override
+        public void write(JsonWriter out, Difficulty value) throws IOException {
+            out.value(value.getName());
+        }
+
+        @Override
+        public Difficulty read(JsonReader in) throws IOException {
+            if (!in.peek().equals(JsonToken.STRING)) {
+                return null;
+            }
+            String difficultyString = in.nextString();
+            return Difficulty.byName(difficultyString);
+        }
+    }
 
     public static class Settings {
         public Difficulty difficulty = Difficulty.EASY;
@@ -44,6 +63,7 @@ public class Config {
 
     private static final Gson GSON = new GsonBuilder()
             .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            .registerTypeAdapter(Difficulty.class, new DifficultyTypeAdapter())
             .setPrettyPrinting()
             .excludeFieldsWithModifiers(Modifier.PRIVATE)
             .create();
@@ -71,6 +91,10 @@ public class Config {
             throw new RuntimeException("Couldn't update config file", e);
         }
         return config;
+    }
+
+    public String getSettingsJSON() {
+        return GSON.toJson(this.settings);
     }
 
     private void sanitize() {

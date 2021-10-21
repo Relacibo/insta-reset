@@ -2,7 +2,6 @@ package de.rcbnetwork.insta_reset;
 
 import com.google.common.collect.Queues;
 import com.google.common.hash.Hashing;
-import com.google.gson.Gson;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
@@ -26,7 +25,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
-    private final Gson GSON = new Gson();
     private static InstaReset _instance;
     private ScheduledFuture<?> cleanupFuture;
 
@@ -216,7 +214,7 @@ public class InstaReset implements ClientModInitializer {
 
     public void start() {
         log("Starting!");
-        log(GSON.toJson(config.settings));
+        log(config.getSettingsJSON());
         this.setState(InstaResetState.STARTING);
         Pregenerator.PregeneratingLevel level = this.currentLevel.get();
         if (client.getNetworkHandler() == null) {
@@ -252,16 +250,16 @@ public class InstaReset implements ClientModInitializer {
             level = pregeneratingLevelQueue.poll();
         }
         level = currentLevel.get();
-        if (level != null && (this.config.pastLevelInfoQueue.isEmpty() || level.hash != this.config.pastLevelInfoQueue.peek().hash)) {
+        if (level != null && (this.config.pastLevelInfoQueue.isEmpty() || !level.hash.equals(this.config.pastLevelInfoQueue.peek().hash))) {
             config.pastLevelInfoQueue.offer(new PastLevelInfo(level.hash, level.creationTimeStamp));
             if (this.config.pastLevelInfoQueue.size() > 5) {
                 this.config.pastLevelInfoQueue.remove();
             }
-            try {
-                config.writeChanges();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+        }
+        try {
+            config.writeChanges();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
         this.setState(InstaResetState.STOPPED);
     }
