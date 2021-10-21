@@ -297,10 +297,10 @@ public class InstaReset implements ClientModInitializer {
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
         int maxLevels = standbyMode ? this.config.settings.numberOfPregenLevelsInStandby : this.config.settings.numberOfPregenLevels;
         long now = new Date().getTime();
-        long base = Math.max(lastScheduledWorldCreation, now) - now;
+        long baseDelay = Math.max(lastScheduledWorldCreation, now) - now;
         for (int i = size; i < maxLevels; i++) {
             // Put each initialization a bit apart
-            PregeneratingLevelFuture future = schedulePregenerationOfLevel(base + ((long)i + 1) * config.settings.timeBetweenStartsMs, now);
+            PregeneratingLevelFuture future = schedulePregenerationOfLevel(baseDelay + ((long)i + 1) * config.settings.timeBetweenStartsMs, now);
             if (future == null) {
                 this.stop();
                 this.client.method_29970(null);
