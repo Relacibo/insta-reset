@@ -41,7 +41,7 @@ public class InstaReset implements ClientModInitializer {
     private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
 
-    private AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
+    private final AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private PregeneratingLevelFuture currentLevelFuture = null;
 
     private long lastScheduledWorldCreation = 0;
@@ -202,7 +202,7 @@ public class InstaReset implements ClientModInitializer {
             }
         }
         this.currentLevelFuture = null;
-        this.currentLevel = new AtomicReference<>(next);
+        this.currentLevel.set(next);
         this.config.settings.resetCounter++;
         try {
             config.writeChanges();
