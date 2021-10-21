@@ -264,12 +264,9 @@ public class InstaReset implements ClientModInitializer {
         }
     }
 
-    private boolean isLevelExpired(Pregenerator.PregeneratingLevel level) {
-        return level.expirationTimeStamp < new Date().getTime();
-    }
-
     private int removeExpiredLevelsFromQueue() {
-        return this.pregeneratingLevelQueue.stream().filter(this::isLevelExpired).map((elem) -> {
+        long timestamp = new Date().getTime();
+        return this.pregeneratingLevelQueue.stream().filter(level -> level.expirationTimeStamp < timestamp).map((elem) -> {
             log(String.format("Removing expired level: %s, %s", elem.hash, elem.expirationTimeStamp));
             this.pregeneratingLevelQueue.remove(elem);
             removeLevelAsync(elem);
@@ -295,7 +292,7 @@ public class InstaReset implements ClientModInitializer {
 
     void refillQueueScheduled() {
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
-        int maxLevels = standbyMode ? 1 : this.config.settings.numberOfPregeneratingLevels;
+        int maxLevels = standbyMode ? this.config.settings.numberOfPregenLevelsInStandby : this.config.settings.numberOfPregenLevels;
         for (int i = size; i < maxLevels; i++) {
             // Put each initialization a bit apart
             PregeneratingLevelFuture future = schedulePregenerationOfLevel((long) (i + 1) * config.settings.timeBetweenStartsMs);

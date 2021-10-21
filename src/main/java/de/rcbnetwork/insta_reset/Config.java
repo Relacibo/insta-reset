@@ -51,7 +51,8 @@ public class Config {
     public static class Settings {
         public Difficulty difficulty = Difficulty.EASY;
         public int resetCounter = 0;
-        public int numberOfPregeneratingLevels = 1;
+        public int numberOfPregenLevels = 2;
+        public int numberOfPregenLevelsInStandby = 0;
         public int expireAfterSeconds = 280;
         public int cleanupIntervalSeconds = 60;
         public boolean showStatusList = true;
@@ -98,8 +99,13 @@ public class Config {
         if (this.settings.difficulty == null) {
             this.settings.difficulty = Difficulty.EASY;
         }
-        if (this.settings.numberOfPregeneratingLevels < 1) {
-            this.settings.numberOfPregeneratingLevels = 1;
+        if (this.settings.numberOfPregenLevels < 1) {
+            this.settings.numberOfPregenLevels = 1;
+        }
+        if (this.settings.numberOfPregenLevelsInStandby < 0) {
+            this.settings.numberOfPregenLevelsInStandby = 0;
+        } else if (this.settings.numberOfPregenLevelsInStandby > this.settings.numberOfPregenLevels) {
+            this.settings.numberOfPregenLevelsInStandby = this.settings.numberOfPregenLevels;
         }
         if (this.settings.expireAfterSeconds <= 0) {
             this.settings.expireAfterSeconds = -1;
