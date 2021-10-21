@@ -133,7 +133,7 @@ public class InstaReset implements ClientModInitializer {
         PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
         while (future != null) {
             try {
-                removeLevelAsync(future.future.get());
+                uninitializeLevelAsync(future.future.get());
             } catch (Exception e) {
                 log(Level.ERROR, String.format("Error stopping level: %s - %s", future.hash, e.getMessage()));
             }
@@ -141,7 +141,7 @@ public class InstaReset implements ClientModInitializer {
         }
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
         while (level != null) {
-            removeLevelAsync(level);
+            uninitializeLevelAsync(level);
             level = pregeneratingLevelQueue.poll();
         }
         level = currentLevel.get();
@@ -272,19 +272,19 @@ public class InstaReset implements ClientModInitializer {
         return this.pregeneratingLevelQueue.stream().filter(level -> level.expirationTimeStamp < timestamp).map((elem) -> {
             log(String.format("Removing expired level: %s, %s", elem.hash, elem.expirationTimeStamp));
             this.pregeneratingLevelQueue.remove(elem);
-            removeLevelAsync(elem);
+            uninitializeLevelAsync(elem);
             return 1;
         }).reduce(0, Integer::sum);
     }
 
-    private void removeLevelAsync(Pregenerator.PregeneratingLevel level) {
+    private void uninitializeLevelAsync(Pregenerator.PregeneratingLevel level) {
         Thread thread = new Thread(() -> {
-            removeLevel(level);
+            uninitializeLevel(level);
         });
         thread.start();
     }
 
-    private void removeLevel(Pregenerator.PregeneratingLevel level) {
+    private void uninitializeLevel(Pregenerator.PregeneratingLevel level) {
         try {
             log(String.format("Removing Level: %s", level.hash));
             Pregenerator.uninitialize(this.client, level);
