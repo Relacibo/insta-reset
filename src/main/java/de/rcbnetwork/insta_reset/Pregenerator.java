@@ -1,6 +1,7 @@
 package de.rcbnetwork.insta_reset;
 
 import com.google.common.collect.Queues;
+import com.google.common.hash.Hashing;
 import com.google.gson.JsonElement;
 import com.mojang.authlib.GameProfileRepository;
 import com.mojang.authlib.minecraft.MinecraftSessionService;
@@ -17,11 +18,15 @@ import net.minecraft.resource.ResourceManager;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.QueueingWorldGenerationProgressListener;
 import net.minecraft.server.integrated.IntegratedServer;
+import net.minecraft.util.FileNameUtil;
 import net.minecraft.util.UserCache;
 import net.minecraft.util.dynamic.RegistryOps;
 import net.minecraft.util.registry.Registry;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.util.registry.SimpleRegistry;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.GameMode;
+import net.minecraft.world.GameRules;
 import net.minecraft.world.SaveProperties;
 import net.minecraft.world.dimension.DimensionOptions;
 import net.minecraft.world.gen.*;
@@ -33,7 +38,10 @@ import org.apache.logging.log4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.Date;
+import java.util.OptionalLong;
 import java.util.Queue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
@@ -44,9 +52,22 @@ public class Pregenerator {
 
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, String hash, String fileName, GeneratorOptions generatorOptions, RegistryTracker.Modifiable registryTracker, LevelInfo levelInfo, long expireAfterSeconds) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(MinecraftClient client, Path savesDirectory, int resetCounter, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
         long creationTimeStamp = new Date().getTime();
         long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
+        String levelName = Pregenerator.generateLevelName(resetCounter);
+        // createLevel() (CreateWorldScreen.java:245)
+        // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
+        // At this point in the original code datapacks are copied into the world folder. (CreateWorldScreen.java:247)
+
+        // Shorter version of original code (MoreOptionsDialog.java:80 & MoreOptionsDialog.java:302)
+        GeneratorOptions generatorOptions = GeneratorOptions.getDefaultOptions().withHardcore(false, OptionalLong.empty());
+        LevelInfo levelInfo = new LevelInfo(levelName, GameMode.SURVIVAL, false, difficulty, false, new GameRules(), DataPackSettings.SAFE_MODE);
+        String seedHash = Hashing.sha256().hashString(String.valueOf(generatorOptions.getSeed()), StandardCharsets.UTF_8).toString();
+        String fileName = Pregenerator.generateFileName(savesDirectory, levelName, seedHash);
+        // MoreOptionsDialog:79+326
+        RegistryTracker.Modifiable registryTracker = RegistryTracker.create();
+
         // method_29605 (MinecraftClient.java:1645) + startIntegratedServer (MinecraftClient.java:1658)
         Function<LevelStorage.Session, DataPackSettings> function = (session) -> {
             return levelInfo.method_29558();
@@ -121,7 +142,26 @@ public class Pregenerator {
         });
         // Fast-Reset: don't save when closing the server.
         ((FlushableServer) server).setShouldFlush(true);
-        return new PregeneratingLevel(hash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+        return new PregeneratingLevel(seedHash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+    }
+
+    private static String generateLevelName(int number) {
+        return String.format("Speedrun #d", number);
+    }
+
+    private static String generateFileName(Path savesDirectory, String levelName, String seedHash) {
+        String fileName = String.format("%s - %s", levelName, seedHash.substring(0, 10));
+        // Ensure its a unique name (CreateWorldScreen.java:222)
+        try {
+            fileName = FileNameUtil.getNextUniqueName(savesDirectory, fileName, "");
+        } catch (Exception var4) {
+            try {
+                fileName = FileNameUtil.getNextUniqueName(savesDirectory, fileName, "");
+            } catch (Exception var3) {
+                throw new RuntimeException("Could not create save folder", var3);
+            }
+        }
+        return fileName;
     }
 
     public static void uninitialize(MinecraftClient client, PregeneratingLevel level) throws IOException {
