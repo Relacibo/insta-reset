@@ -121,7 +121,7 @@ public class InstaReset implements ClientModInitializer {
                     future.future.get();
                     level = pregeneratingLevelQueue.poll();
                     while (level != null) {
-                        uninitializeLevelAsync(pregeneratingLevelQueue.poll());
+                        uninitializeLevelAsync(level);
                         level = pregeneratingLevelQueue.poll();
                     }
                 } catch (Exception e) {
