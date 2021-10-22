@@ -51,9 +51,10 @@ import java.util.UUID;
 public class Pregenerator {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, Path savesDirectory, int levelNumber, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(MinecraftClient client, int levelNumber, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
         long creationTimeStamp = new Date().getTime();
         long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
+        Path savesDirectory = client.getLevelStorage().getSavesDirectory();
         String levelName = Pregenerator.generateLevelName(levelNumber);
         // createLevel() (CreateWorldScreen.java:245)
         // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));

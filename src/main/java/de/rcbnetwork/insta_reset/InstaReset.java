@@ -293,10 +293,9 @@ public class InstaReset implements ClientModInitializer {
 
     private void createLevel(int levelNumber) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
-        Path savesDirectory = this.client.getLevelStorage().getSavesDirectory();
         Pregenerator.PregeneratingLevel level;
         try {
-            level = Pregenerator.pregenerate(client, savesDirectory, levelNumber, expireAfterSeconds, config.settings.difficulty);
+            level = Pregenerator.pregenerate(client, levelNumber, expireAfterSeconds, config.settings.difficulty);
         } catch (Exception e) {
             log(Level.ERROR, String.format("Pregeneration Initialization failed! %s", levelNumber));
             e.printStackTrace();
