@@ -19,12 +19,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class InstaResetDebugScreen {
-
-    InstaReset instaReset;
-
-    public InstaResetDebugScreen(InstaReset instaReset) {
-        this.instaReset = instaReset;
-    }
+    private InstaReset instaReset;
 
     private final AtomicReference<List<String>> debugMessage = new AtomicReference<>(Collections.emptyList());
     private final AtomicInteger debugMessageLineCount = new AtomicInteger(0);
@@ -40,6 +35,10 @@ public class InstaResetDebugScreen {
     protected void setDebugMessage(List<String> list) {
         debugMessage.set(list);
         debugMessageLineCount.set(list.size());
+    }
+
+    public InstaResetDebugScreen(InstaReset instaReset) {
+        this.instaReset = instaReset;
     }
 
     public void render(MatrixStack matrices, TextRenderer textRenderer, int width, int height) {

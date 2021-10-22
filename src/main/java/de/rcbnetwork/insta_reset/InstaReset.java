@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -21,6 +22,7 @@ import java.util.stream.Stream;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.Nullable;
 
 public class InstaReset implements ClientModInitializer {
     private static InstaReset _instance;
@@ -183,10 +185,8 @@ public class InstaReset implements ClientModInitializer {
             // When cancel returns true, the task was being executed at the time of calling and
             // there is now a new level in the queue.
             // (We have to cancel the future, otherwise we may have two server initializations in one interval)
-            boolean futureIsNull = future == null;
-            if (futureIsNull || future.future.cancel(false)) {
-                String uuid = futureIsNull ? createUUID() : future.uuid;
-                createLevel(uuid);
+            if (future == null || future.future.cancel(false)) {
+                createLevel(this.config.settings.resetCounter);
             }
             next = pregeneratingLevelQueue.poll();
             assert next != null;
@@ -276,31 +276,34 @@ public class InstaReset implements ClientModInitializer {
             long delayInMs = baseDelay + (long) i * config.settings.timeBetweenStartsMs;
             this.lastScheduledWorldCreation = now + delayInMs;
             final String uuid = createUUID();
-            ScheduledFuture<?> scheduledFuture = service.schedule(() -> createLevel(uuid), delayInMs, TimeUnit.MILLISECONDS);
+            ScheduledFuture<?> scheduledFuture = service.schedule(() -> {
+                int levelNumber = this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1;
+                createLevel(levelNumber);
+                // Will be executed after it was inserted
+                this.removeFutureWithUUID(uuid);
+                if (config.settings.showStatusList) {
+                    debugScreen.updateDebugMessage();
+                }
+            }, delayInMs, TimeUnit.MILLISECONDS);
             PregeneratingLevelFuture future = new PregeneratingLevelFuture(uuid, this.lastScheduledWorldCreation, scheduledFuture);
             this.pregeneratingLevelFutureQueue.offer(future);
-            log(String.format("Scheduled level with uuid %s for %s", uuid, future.expectedCreationTimeStamp));
+            log(String.format("Scheduled level with uuid %s for %s", uuid, this.lastScheduledWorldCreation));
         }
     }
 
-    private void createLevel(String uuid) {
-        this.removeFutureWithUUID(uuid);
+    private void createLevel(int levelNumber) {
         int expireAfterSeconds = config.settings.expireAfterSeconds;
-        int number = this.config.settings.resetCounter + pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
         Path savesDirectory = this.client.getLevelStorage().getSavesDirectory();
         Pregenerator.PregeneratingLevel level;
         try {
-            level = Pregenerator.pregenerate(client, savesDirectory, number, expireAfterSeconds, config.settings.difficulty);
+            level = Pregenerator.pregenerate(client, savesDirectory, levelNumber, expireAfterSeconds, config.settings.difficulty);
         } catch (Exception e) {
-            log(Level.ERROR, String.format("Pregeneration Initialization failed! %s", uuid));
+            log(Level.ERROR, String.format("Pregeneration Initialization failed! %s", levelNumber));
             e.printStackTrace();
             return;
         }
         log(String.format("Started Server: %s", level.hash));
         this.pregeneratingLevelQueue.offer(level);
-        if (config.settings.showStatusList) {
-            debugScreen.updateDebugMessage();
-        }
     }
 
     private String createUUID() {
@@ -313,7 +316,7 @@ public class InstaReset implements ClientModInitializer {
 
     public void openCurrentLevel() {
         Pregenerator.PregeneratingLevel level = currentLevel.get();
-        log(String.format("Opening level: %s", level.hash));
+        log(String.format("Opening level: %s - %s", this.config.settings.resetCounter, level.hash));
         String fileName = level.fileName;
         LevelInfo levelInfo = level.levelInfo;
         GeneratorOptions generatorOptions = level.generatorOptions;

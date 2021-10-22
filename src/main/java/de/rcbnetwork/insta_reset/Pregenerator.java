@@ -51,10 +51,10 @@ import java.util.UUID;
 public class Pregenerator {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, Path savesDirectory, int resetCounter, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(MinecraftClient client, Path savesDirectory, int levelNumber, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
         long creationTimeStamp = new Date().getTime();
         long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
-        String levelName = Pregenerator.generateLevelName(resetCounter);
+        String levelName = Pregenerator.generateLevelName(levelNumber);
         // createLevel() (CreateWorldScreen.java:245)
         // this.client.method_29970(new SaveLevelScreen(new TranslatableText("createWorld.preparing")));
         // At this point in the original code datapacks are copied into the world folder. (CreateWorldScreen.java:247)
@@ -145,7 +145,7 @@ public class Pregenerator {
     }
 
     private static String generateLevelName(int number) {
-        return String.format("Speedrun #d", number);
+        return String.format("Speedrun %d", number);
     }
 
     private static String generateFileName(Path savesDirectory, String levelName, String seedHash) {
