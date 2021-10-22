@@ -179,6 +179,7 @@ public class InstaReset implements ClientModInitializer {
             // In both cases create a new one synchronously.
             // When cancel returns true, the task was being executed at the time of calling and
             // there is now a new level in the queue.
+            // (We have to cancel the future, otherwise we may have two server initializations in one interval)
             boolean futureIsNull = future == null;
             if (futureIsNull || future.future.cancel(false)) {
                 String uuid = futureIsNull ? createUUID() : future.uuid;
