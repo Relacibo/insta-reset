@@ -1,19 +1,15 @@
 package de.rcbnetwork.insta_reset;
 
 import com.google.common.collect.Queues;
-import com.google.common.hash.Hashing;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.resource.DataPackSettings;
-import net.minecraft.util.FileNameUtil;
 import net.minecraft.util.registry.RegistryTracker;
 import net.minecraft.world.*;
 import net.minecraft.world.gen.*;
 import net.minecraft.world.level.LevelInfo;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
@@ -27,8 +23,6 @@ import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
     private static InstaReset _instance;
-    private ScheduledFuture<?> cleanupFuture;
-
     public static InstaReset instance() {
         return _instance;
     }
@@ -41,11 +35,9 @@ public class InstaReset implements ClientModInitializer {
     private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
     private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
-
+    private ScheduledFuture<?> cleanupFuture;
     private final AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
-
     private long lastScheduledWorldCreation = 0;
-
     private boolean standbyMode = false;
 
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
@@ -340,15 +332,15 @@ public class InstaReset implements ClientModInitializer {
     }
 
     private String createDebugStringFromPastLevel(PastLevelInfo info) {
-        return String.format("%s:%sc", info.hash.substring(0, 10), Long.toHexString(info.creationTimeStamp));
+        return String.format("%s:%s", info.hash.substring(0, 10), Long.toHexString(info.creationTimeStamp));
     }
 
     private String createDebugStringFromLevelInfo(Pregenerator.PregeneratingLevel level) {
-        return String.format("%s:%sc", level.hash.substring(0, 10), Long.toHexString(level.creationTimeStamp));
+        return String.format("%s:%s", level.hash.substring(0, 10), Long.toHexString(level.creationTimeStamp));
     }
 
     private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("-:%ss", Long.toHexString(future.expectedCreationTimeStamp));
+        return String.format("Scheduled:%s", Long.toHexString(future.expectedCreationTimeStamp));
     }
 
     private String createSettingsDebugString() {

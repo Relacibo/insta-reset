@@ -24,7 +24,6 @@ public class Config {
     private static final String FILE_NAME = "insta-reset.json";
     private Path configPath;
 
-
     public final Settings settings = new Settings();
 
     public String getFileName() {

@@ -49,7 +49,6 @@ import java.util.function.Function;
 import java.util.UUID;
 
 public class Pregenerator {
-
     private static final Logger LOGGER = LogManager.getLogger();
 
     public static PregeneratingLevel pregenerate(MinecraftClient client, Path savesDirectory, int resetCounter, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
