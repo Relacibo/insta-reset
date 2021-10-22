@@ -1,6 +1,7 @@
 package de.rcbnetwork.insta_reset.mixin.client;
 
 import de.rcbnetwork.insta_reset.InstaReset;
+import de.rcbnetwork.insta_reset.InstaResetDebugScreen;
 import net.minecraft.client.gui.screen.SaveLevelScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.util.math.MatrixStack;
@@ -26,23 +27,15 @@ public class SaveLevelScreenMixin extends Screen {
     }
 
     @Unique
-    Supplier<Iterator<String>> instaResetStatusTextSupplier = Collections::emptyIterator;
+    InstaResetDebugScreen instaResetDebugScreen;
 
     @Inject(method = "<init>", at = @At("TAIL"))
     public void extendInit(CallbackInfo info) {
-        if (!InstaReset.instance().isModRunning()) {
-            return;
-        }
-        instaResetStatusTextSupplier = InstaReset.instance()::getDebugMessage;
+        instaResetDebugScreen = InstaReset.instance().debugScreen;
     }
 
     @Inject(method = "render", at = @At("TAIL"))
     public void extendRender(MatrixStack matrices, int mouseX, int mouseY, float delta, CallbackInfo info) {
-        AtomicReference<Float> yAtom = new AtomicReference<>(1.0f);
-        instaResetStatusTextSupplier.get().forEachRemaining((str) -> {
-            float y = yAtom.get();
-            this.textRenderer.draw(matrices, str, 0.0f, y, 0xffffff);
-            yAtom.set(y + 10);
-        });
+        instaResetDebugScreen.render(matrices, this.textRenderer, this.width, this.height);
     }
 }

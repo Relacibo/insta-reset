@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -30,6 +31,7 @@ public class InstaReset implements ClientModInitializer {
     public static final String MOD_NAME = "InstaReset";
     public static final String MOD_ID = "insta-reset";
     private static final Logger logger = LogManager.getLogger();
+    public final InstaResetDebugScreen debugScreen = new InstaResetDebugScreen(this);
     private Config config;
     private MinecraftClient client;
     private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
@@ -43,12 +45,10 @@ public class InstaReset implements ClientModInitializer {
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
         return this.currentLevel.get();
     }
-
-    private final AtomicReference<List<String>> debugMessage = new AtomicReference<>(Collections.emptyList());
-
-    public Iterator<String> getDebugMessage() {
-        return debugMessage.get().stream().iterator();
-    }
+    public Config.Settings getSettings() { return config.settings; }
+    public Stream<Pregenerator.PregeneratingLevel> getPregeneratingLevelQueueStream() { return pregeneratingLevelQueue.stream(); }
+    public Stream<PregeneratingLevelFuture> getPregeneratingLevelFutureQueueStream() { return pregeneratingLevelFutureQueue.stream(); }
+    public Stream<PastLevelInfo> getPastLevelInfoQueueStream() { return config.pastLevelInfoQueue.stream(); }
 
     private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
@@ -96,7 +96,7 @@ public class InstaReset implements ClientModInitializer {
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
-        this.debugMessage.set(Collections.emptyList());
+        this.debugScreen.setDebugMessage(Collections.emptyList());;
         cancelScheduledCleanup();
         // Unload current running levels
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
@@ -186,7 +186,7 @@ public class InstaReset implements ClientModInitializer {
         }
         this.refillQueueScheduled();
         if (config.settings.showStatusList) {
-            this.updateDebugMessage();
+            this.debugScreen.updateDebugMessage();
         }
         if (this.config.settings.cleanupIntervalSeconds != -1) {
             this.scheduleCleanup();
@@ -277,7 +277,7 @@ public class InstaReset implements ClientModInitializer {
         Path savesDirectory = this.client.getLevelStorage().getSavesDirectory();
         Pregenerator.PregeneratingLevel level;
         try {
-            level = Pregenerator.pregenerate(client, savesDirectory, number, expireAfterSeconds, this.config.settings.difficulty);
+            level = Pregenerator.pregenerate(client, savesDirectory, number, expireAfterSeconds, config.settings.difficulty);
         } catch (Exception e) {
             log(Level.ERROR, String.format("Pregeneration Initialization failed! %s", uuid));
             e.printStackTrace();
@@ -286,7 +286,7 @@ public class InstaReset implements ClientModInitializer {
         log(String.format("Started Server: %s", level.hash));
         this.pregeneratingLevelQueue.offer(level);
         if (config.settings.showStatusList) {
-            updateDebugMessage();
+            debugScreen.updateDebugMessage();
         }
     }
 
@@ -307,47 +307,6 @@ public class InstaReset implements ClientModInitializer {
         RegistryTracker.Modifiable registryTracker = level.registryTracker;
         // CreateWorldScreen.java:258
         this.client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
-    }
-
-    private void updateDebugMessage() {
-        updateDebugMessage(new Date().getTime());
-    }
-
-    private synchronized void updateDebugMessage(long now) {
-        String nextLevelString = this.currentLevel.get() != null ? createDebugStringFromLevelInfo(this.currentLevel.get()) : "-";
-        nextLevelString = String.format("%s <-", nextLevelString);
-        String currentTimeStamp = String.format("Time: %s", Long.toHexString(now));
-        String configString = createSettingsDebugString();
-
-        Stream<String> futureStrings = pregeneratingLevelFutureQueue.stream().map(this::createDebugStringFromLevelFuture);
-        Stream<String> levelStrings = pregeneratingLevelQueue.stream().map(this::createDebugStringFromLevelInfo);
-        Stream<String> pastStrings = this.config.pastLevelInfoQueue.stream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s", s));
-        this.debugMessage.set(Stream.of(pastStrings,
-                Stream.of(nextLevelString),
-                levelStrings,
-                futureStrings,
-                Stream.of(currentTimeStamp),
-                Stream.of(configString)
-        ).flatMap(stream -> stream).collect(Collectors.toList()));
-    }
-
-    private String createDebugStringFromPastLevel(PastLevelInfo info) {
-        return String.format("%s:%s", info.hash.substring(0, 10), Long.toHexString(info.creationTimeStamp));
-    }
-
-    private String createDebugStringFromLevelInfo(Pregenerator.PregeneratingLevel level) {
-        return String.format("%s:%s", level.hash.substring(0, 10), Long.toHexString(level.creationTimeStamp));
-    }
-
-    private String createDebugStringFromLevelFuture(PregeneratingLevelFuture future) {
-        return String.format("Scheduled:%s", Long.toHexString(future.expectedCreationTimeStamp));
-    }
-
-    private String createSettingsDebugString() {
-        Difficulty difficulty = config.settings.difficulty;
-        int resetCounter = config.settings.resetCounter;
-        int expireAfterSeconds = config.settings.expireAfterSeconds;
-        return String.format("%s:%d:%d", difficulty.getName().charAt(0), resetCounter, expireAfterSeconds);
     }
 
     public static void log(String message) {

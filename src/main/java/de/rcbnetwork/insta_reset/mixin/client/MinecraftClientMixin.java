@@ -53,7 +53,6 @@ import java.util.function.Function;
 
 @Mixin(MinecraftClient.class)
 public class MinecraftClientMixin {
-
     @Final
     @Shadow
     private AtomicReference<WorldGenerationProgressTracker> worldGenProgressTracker;
