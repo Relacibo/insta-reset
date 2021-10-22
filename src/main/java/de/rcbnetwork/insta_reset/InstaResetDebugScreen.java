@@ -21,16 +21,22 @@ import java.util.stream.Stream;
 public class InstaResetDebugScreen {
 
     InstaReset instaReset;
+
     public InstaResetDebugScreen(InstaReset instaReset) {
         this.instaReset = instaReset;
     }
 
     private final AtomicReference<List<String>> debugMessage = new AtomicReference<>(Collections.emptyList());
     private final AtomicInteger debugMessageLineCount = new AtomicInteger(0);
+
     public Stream<String> getDebugMessage() {
         return debugMessage.get().stream();
     }
-    public int getDebugMessageLineCount() { return debugMessageLineCount.get(); }
+
+    public int getDebugMessageLineCount() {
+        return debugMessageLineCount.get();
+    }
+
     protected void setDebugMessage(List<String> list) {
         debugMessage.set(list);
         debugMessageLineCount.set(list.size());
@@ -44,7 +50,7 @@ public class InstaResetDebugScreen {
             int y = height - (lineCount - i) * (textRenderer.fontHeight + 1);
             int x = width - textRenderer.getWidth(str) - 1;
             boolean isCurrentLevel = i == 6;
-            int color =  isCurrentLevel ? 0xaab00baa : 0x55ffffff;
+            int color = isCurrentLevel ? 0xaab00baa : 0x55ffffff;
             VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(Tessellator.getInstance().getBuffer());
             textRenderer.draw(new LiteralText(str), x, y, color, false, matrices.peek().getModel(), immediate, true, 0, 0xf000f0);
             immediate.draw();

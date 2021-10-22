@@ -24,6 +24,7 @@ import org.apache.logging.log4j.Logger;
 
 public class InstaReset implements ClientModInitializer {
     private static InstaReset _instance;
+
     public static InstaReset instance() {
         return _instance;
     }
@@ -45,10 +46,22 @@ public class InstaReset implements ClientModInitializer {
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
         return this.currentLevel.get();
     }
-    public Config.Settings getSettings() { return config.settings; }
-    public Stream<Pregenerator.PregeneratingLevel> getPregeneratingLevelQueueStream() { return pregeneratingLevelQueue.stream(); }
-    public Stream<PregeneratingLevelFuture> getPregeneratingLevelFutureQueueStream() { return pregeneratingLevelFutureQueue.stream(); }
-    public Stream<PastLevelInfo> getPastLevelInfoQueueStream() { return config.pastLevelInfoQueue.stream(); }
+
+    public Config.Settings getSettings() {
+        return config.settings;
+    }
+
+    public Stream<Pregenerator.PregeneratingLevel> getPregeneratingLevelQueueStream() {
+        return pregeneratingLevelQueue.stream();
+    }
+
+    public Stream<PregeneratingLevelFuture> getPregeneratingLevelFutureQueueStream() {
+        return pregeneratingLevelFutureQueue.stream();
+    }
+
+    public Stream<PastLevelInfo> getPastLevelInfoQueueStream() {
+        return config.pastLevelInfoQueue.stream();
+    }
 
     private final AtomicReference<InstaResetState> state = new AtomicReference<>(InstaResetState.STOPPED);
 
@@ -96,7 +109,7 @@ public class InstaReset implements ClientModInitializer {
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
-        this.debugScreen.setDebugMessage(Collections.emptyList());;
+        this.debugScreen.setDebugMessage(Collections.emptyList());
         cancelScheduledCleanup();
         // Unload current running levels
         Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
@@ -256,7 +269,7 @@ public class InstaReset implements ClientModInitializer {
         int maxLevels = standbyMode ? this.config.settings.numberOfPregenLevelsInStandby : this.config.settings.numberOfPregenLevels;
         long now = new Date().getTime();
         // make the delay timeBetweenStartsMs from last creation or if this is negative 0
-        long baseDelay = lastScheduledWorldCreation - now + config.settings.timeBetweenStartsMs ;
+        long baseDelay = lastScheduledWorldCreation - now + config.settings.timeBetweenStartsMs;
         baseDelay = Math.max(0, baseDelay);
         for (int i = size; i < maxLevels; i++) {
             // Schedule all creations at least timeBetweenStartsMs apart from each other
