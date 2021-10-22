@@ -65,14 +65,13 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public enum InstaResetState {
-        STARTING,
         RUNNING,
         STOPPING,
         STOPPED
     }
 
     public boolean isModRunning() {
-        return state.get() == InstaResetState.STARTING || state.get() == InstaResetState.RUNNING;
+        return state.get() == InstaResetState.RUNNING;
     }
 
     public InstaResetState getState() {
@@ -98,9 +97,8 @@ public class InstaReset implements ClientModInitializer {
 
     public void start() {
         log("Starting!");
-        this.setState(InstaResetState.STARTING);
-        openNextLevel();
         this.setState(InstaResetState.RUNNING);
+        openNextLevel();
     }
 
     public void stop() {
