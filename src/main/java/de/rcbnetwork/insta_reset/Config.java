@@ -53,7 +53,6 @@ public class Config {
         public int numberOfPregenLevels = 2;
         public int numberOfPregenLevelsInStandby = 0;
         public int expireAfterSeconds = 280;
-        public boolean showStatusList = true;
         public int timeBetweenStartsMs = 1000;
     }
 
