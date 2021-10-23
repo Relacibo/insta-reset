@@ -236,12 +236,12 @@ public class InstaReset implements ClientModInitializer {
             this.removeFutureWithUUID(uuid);
             log(String.format("Started Server: %s", level.hash));
             this.pregeneratingLevelQueue.offer(level);
-            debugScreen.updateDebugMessage();
             // Schedule the expiration of this level
             if (config.settings.expireAfterSeconds != -1) {
                 ScheduledFuture<?> expf = scheduleLevelExpiration(level);
                 this.pregeneratingLevelExpireFutureQueue.offer(new PregeneratingLevelExpireFuture(level.hash, expf));
             }
+            debugScreen.updateDebugMessage();
         }, delayInMs, TimeUnit.MILLISECONDS);
     }
 

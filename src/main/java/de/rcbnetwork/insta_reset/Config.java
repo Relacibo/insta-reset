@@ -110,6 +110,8 @@ public class Config {
         this.settings.numberOfPregenLevelsStandby = Math.min(this.settings.numberOfPregenLevelsStandby, this.settings.numberOfPregenLevels);
         this.settings.timeBetweenStartsMs = Math.max(this.settings.timeBetweenStartsMs, 50);
         this.settings.timeBetweenStartsMsStandby = Math.max(this.settings.timeBetweenStartsMsStandby, 50);
+        this.settings.timeBetweenStartsMsStandby = Math.min(this.settings.timeBetweenStartsMsStandby, this.settings.timeBetweenStartsMs);
+
     }
 
     public void writeChanges() throws IOException {
