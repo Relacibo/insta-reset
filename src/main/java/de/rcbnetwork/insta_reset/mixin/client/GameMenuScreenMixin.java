@@ -49,6 +49,9 @@ public class GameMenuScreenMixin extends Screen {
 
     @Inject(method = "tick", at = @At("TAIL"))
     public void extendTick(CallbackInfo info) {
+        if (!InstaReset.instance().isModRunning()) {
+            return;
+        }
         boolean shiftDown = hasShiftDown();
         if (shiftDown ^ shiftDownLast) {
             shiftDownLast = shiftDown;
@@ -58,7 +61,10 @@ public class GameMenuScreenMixin extends Screen {
 
     @Redirect(method = "initWidgets", at = @At(value = "NEW", target = "net/minecraft/client/gui/widget/ButtonWidget", ordinal = 7))
     private ButtonWidget createExitButton(int x, int y, int width, int height, Text message, ButtonWidget.PressAction onPress) {
-         QUIT_BUTTON = new ButtonWidget(x, y, width, height, message, (b) -> {
+        if (!InstaReset.instance().isModRunning()) {
+            return new ButtonWidget(x, y, width, height, message, onPress);
+        }
+        QUIT_BUTTON = new ButtonWidget(x, y, width, height, message, (b) -> {
             boolean shiftPressed = hasShiftDown();
             InstaReset.instance().setCurrentServerShouldFlush(hasShiftDown());
             if (!shiftPressed) {
@@ -66,6 +72,6 @@ public class GameMenuScreenMixin extends Screen {
             }
             onPress.onPress(b);
         });
-         return QUIT_BUTTON;
+        return QUIT_BUTTON;
     }
 }
