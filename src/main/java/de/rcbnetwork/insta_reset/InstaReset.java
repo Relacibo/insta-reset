@@ -37,6 +37,7 @@ public class InstaReset implements ClientModInitializer {
     private final Queue<Pregenerator.PregeneratingLevel> pregeneratingLevelQueue = Queues.newConcurrentLinkedQueue();
     private final AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
     private long lastScheduledWorldCreation = 0;
+    private long lastWorldCreation = 0;
     private long lastReset = 0;
 
     public Pregenerator.PregeneratingLevel getCurrentLevel() {
@@ -141,8 +142,8 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void openNextLevel() {
-        this.config.settings.resetCounter++;
-        this.lastReset = new Date().getTime();
+        long now = new Date().getTime();
+        boolean wasInStandbyMode = isInStandbyMode(now);
         // Add last level to pastLevelInfoQueue
         Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
@@ -150,6 +151,13 @@ public class InstaReset implements ClientModInitializer {
             if (this.config.pastLevelInfoQueue.size() > 5) {
                 this.config.pastLevelInfoQueue.remove();
             }
+        }
+        this.config.settings.resetCounter++;
+        this.lastReset = now;
+        // If the mod was in standby mode then the scheduled world creations will be too far apart from each other.
+        // So reschedule with small increments.
+        if (wasInStandbyMode) {
+            rescheduleWorldCreation();
         }
         Pregenerator.PregeneratingLevel next = pregeneratingLevelQueue.poll();
         if (next == null) {
@@ -198,52 +206,72 @@ public class InstaReset implements ClientModInitializer {
     void refillQueueScheduled() {
         long now = new Date().getTime();
         int size = pregeneratingLevelQueue.size() + pregeneratingLevelFutureQueue.size();
-        int maxLevels = now > this.lastReset + config.settings.expireAfterSeconds * 1000L ?
-                this.config.settings.numberOfPregenLevelsInStandby :
+        boolean standByMode = isInStandbyMode(now);
+        int maxLevels = standByMode ?
+                this.config.settings.numberOfPregenLevelsStandby :
                 this.config.settings.numberOfPregenLevels;
+        int timeBetweenStarts = standByMode ?
+                config.settings.timeBetweenStartsMsStandby :
+                config.settings.timeBetweenStartsMs;
         // make the delay timeBetweenStartsMs from last creation or if this is negative 0
-        long baseDelay = lastScheduledWorldCreation - now + config.settings.timeBetweenStartsMs;
+        long baseDelay = lastScheduledWorldCreation - now + timeBetweenStarts;
         baseDelay = Math.max(0, baseDelay);
         for (int i = 0; i < maxLevels - size; i++) {
             // Schedule all creations at least timeBetweenStartsMs apart from each other
-            long delayInMs = baseDelay + (long) i * config.settings.timeBetweenStartsMs;
+            long delayInMs = baseDelay + (long) i * timeBetweenStarts;
             this.lastScheduledWorldCreation = now + delayInMs;
             final String uuid = createUUID();
-            ScheduledFuture<?> scheduledFuture = service.schedule(() -> levelCreationTask(uuid), delayInMs, TimeUnit.MILLISECONDS);
+            ScheduledFuture<?> scheduledFuture = scheduleLevelCreation(uuid, delayInMs);
             PregeneratingLevelFuture future = new PregeneratingLevelFuture(uuid, this.lastScheduledWorldCreation, scheduledFuture);
             this.pregeneratingLevelFutureQueue.offer(future);
             log(String.format("Scheduled level with uuid %s for %s", uuid, this.lastScheduledWorldCreation));
         }
     }
 
-    private void levelCreationTask(String uuid) {
-        int levelNumber = this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1;
-        Pregenerator.PregeneratingLevel level = createLevel(levelNumber);
-        // Will be executed after it was inserted in the main thread
-        this.removeFutureWithUUID(uuid);
-        log(String.format("Started Server: %s", level.hash));
-        this.pregeneratingLevelQueue.offer(level);
-        debugScreen.updateDebugMessage();
-        // Schedule the expiration of this level
-        if (config.settings.expireAfterSeconds != -1) {
-            ScheduledFuture<?> expf = service.schedule(() -> levelExpirationTask(level), level.expirationTimeStamp - new Date().getTime(), TimeUnit.MILLISECONDS);
-            this.pregeneratingLevelExpireFutureQueue.offer(new PregeneratingLevelExpireFuture(level.hash, expf));
-        }
+    private ScheduledFuture<?> scheduleLevelCreation(String uuid, long delayInMs) {
+        return service.schedule(() -> {
+            int levelNumber = this.config.settings.resetCounter + pregeneratingLevelQueue.size() + 1;
+            Pregenerator.PregeneratingLevel level = createLevel(levelNumber);
+            // Will be executed after it was inserted in the main thread
+            this.removeFutureWithUUID(uuid);
+            log(String.format("Started Server: %s", level.hash));
+            this.pregeneratingLevelQueue.offer(level);
+            debugScreen.updateDebugMessage();
+            // Schedule the expiration of this level
+            if (config.settings.expireAfterSeconds != -1) {
+                ScheduledFuture<?> expf = scheduleLevelExpiration(level);
+                this.pregeneratingLevelExpireFutureQueue.offer(new PregeneratingLevelExpireFuture(level.hash, expf));
+            }
+        }, delayInMs, TimeUnit.MILLISECONDS);
     }
 
-    private void levelExpirationTask(Pregenerator.PregeneratingLevel level) {
-        // Remove self from queue
-        this.pregeneratingLevelExpireFutureQueue.removeIf(f -> f.hash.equals(level.hash));
-        boolean removed = this.pregeneratingLevelQueue.remove(level);
-        if (!removed) {
-            return;
+    private ScheduledFuture<?> scheduleLevelExpiration(Pregenerator.PregeneratingLevel level) {
+        return service.schedule(() -> {
+            // Remove self from queue
+            this.pregeneratingLevelExpireFutureQueue.removeIf(f -> f.hash.equals(level.hash));
+            boolean removed = this.pregeneratingLevelQueue.remove(level);
+            if (!removed) {
+                return;
+            }
+            log(String.format("Removing expired level: %s, %s", level.hash, level.expirationTimeStamp));
+            try {
+                Pregenerator.uninitialize(this.client, level);
+            } catch (IOException e) {
+                log(Level.ERROR, "Cannot close Session");
+            }
+            refillQueueScheduled();
+            debugScreen.updateDebugMessage();
+        }, level.expirationTimeStamp - new Date().getTime(), TimeUnit.MILLISECONDS);
+    }
+
+    private void rescheduleWorldCreation() {
+        PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
+        while (future != null) {
+            // Only cancel creation task, expiration task isn't scheduled yet.
+            future.future.cancel(false);
+            future = pregeneratingLevelFutureQueue.poll();
         }
-        log(String.format("Removing expired level: %s, %s", level.hash, level.expirationTimeStamp));
-        try {
-            Pregenerator.uninitialize(this.client, level);
-        } catch (IOException e) {
-            log(Level.ERROR, "Cannot close Session");
-        }
+        this.lastScheduledWorldCreation = this.lastWorldCreation;
         refillQueueScheduled();
         debugScreen.updateDebugMessage();
     }
@@ -258,6 +286,7 @@ public class InstaReset implements ClientModInitializer {
             e.printStackTrace();
             return null;
         }
+        this.lastWorldCreation = new Date().getTime();
         return level;
     }
 
@@ -278,6 +307,10 @@ public class InstaReset implements ClientModInitializer {
         RegistryTracker.Modifiable registryTracker = level.registryTracker;
         // CreateWorldScreen.java:258
         this.client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
+    }
+
+    private boolean isInStandbyMode(long now) {
+        return now > this.lastReset + config.settings.expireAfterSeconds * 1000L;
     }
 
     public static void log(String message) {
