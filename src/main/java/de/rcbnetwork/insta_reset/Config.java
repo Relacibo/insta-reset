@@ -53,7 +53,6 @@ public class Config {
         public int numberOfPregenLevels = 2;
         public int numberOfPregenLevelsInStandby = 0;
         public int expireAfterSeconds = 280;
-        public int cleanupIntervalSeconds = 5;
         public boolean showStatusList = true;
         public int timeBetweenStartsMs = 1000;
     }
@@ -108,9 +107,6 @@ public class Config {
         }
         if (this.settings.expireAfterSeconds <= 0) {
             this.settings.expireAfterSeconds = -1;
-        }
-        if (this.settings.cleanupIntervalSeconds <= 0) {
-            this.settings.cleanupIntervalSeconds = -1;
         }
         int size = this.pastLevelInfoQueue.size();
         while (size > 5) {

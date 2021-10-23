@@ -50,8 +50,9 @@ public class InstaResetDebugScreen {
             int x = width - textRenderer.getWidth(str) - 1;
             boolean isCurrentLevel = i == 6;
             int color = isCurrentLevel ? 0xaab00baa : 0x55ffffff;
+            int backgroundColor = isCurrentLevel ? 0x12345678 : 0;
             VertexConsumerProvider.Immediate immediate = VertexConsumerProvider.immediate(Tessellator.getInstance().getBuffer());
-            textRenderer.draw(new LiteralText(str), x, y, color, false, matrices.peek().getModel(), immediate, true, 0, 0xf000f0);
+            textRenderer.draw(new LiteralText(str), x, y, color, false, matrices.peek().getModel(), immediate, true, backgroundColor, 0xf000f0);
             immediate.draw();
             iAtom.set(i + 1);
         });
