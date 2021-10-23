@@ -20,7 +20,8 @@ import java.util.function.BooleanSupplier;
 
 @Mixin(ThreadExecutor.class)
 public abstract class ThreadExecutorMixin<R extends Runnable> implements MessageListener<R>, Executor {
-    @Shadow public abstract void runTasks(BooleanSupplier stopCondition);
+    @Shadow
+    public abstract void runTasks(BooleanSupplier stopCondition);
 
     @Unique
     private final Object tasksLock = new Object();
@@ -56,6 +57,15 @@ public abstract class ThreadExecutorMixin<R extends Runnable> implements Message
 
         info.cancel();
     }*/
+
+    @Inject(method = "runTasks()V", at = @At("HEAD"), cancellable = true)
+    private void replaceRunTasks(CallbackInfo info) {
+        synchronized (tasksLock) {
+            while (this.runTask()) {
+            }
+        }
+        info.cancel();
+    }
 
     @Inject(method = "runTasks(Ljava/util/function/BooleanSupplier;)V", at = @At("HEAD"), cancellable = true)
     private void replaceRunTasks(BooleanSupplier stopCondition, CallbackInfo info) {

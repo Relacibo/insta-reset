@@ -54,6 +54,7 @@ public class Config {
         public int numberOfPregenLevelsInStandby = 0;
         public int expireAfterSeconds = 280;
         public int timeBetweenStartsMs = 1000;
+        public int timeBetweenStartsMsInStandby = 5000;
     }
 
     private static final Gson GSON = new GsonBuilder()
@@ -96,22 +97,19 @@ public class Config {
         if (this.settings.difficulty == null) {
             this.settings.difficulty = Difficulty.EASY;
         }
-        if (this.settings.numberOfPregenLevels < 1) {
-            this.settings.numberOfPregenLevels = 1;
-        }
-        if (this.settings.numberOfPregenLevelsInStandby < 0) {
-            this.settings.numberOfPregenLevelsInStandby = 0;
-        } else if (this.settings.numberOfPregenLevelsInStandby > this.settings.numberOfPregenLevels) {
-            this.settings.numberOfPregenLevelsInStandby = this.settings.numberOfPregenLevels;
-        }
-        if (this.settings.expireAfterSeconds <= 0) {
-            this.settings.expireAfterSeconds = -1;
-        }
         int size = this.pastLevelInfoQueue.size();
         while (size > 5) {
             this.pastLevelInfoQueue.remove();
             size--;
         }
+        if (this.settings.expireAfterSeconds <= 0) {
+            this.settings.expireAfterSeconds = -1;
+        }
+        this.settings.numberOfPregenLevels = Math.max(this.settings.numberOfPregenLevels, 1);
+        this.settings.numberOfPregenLevelsInStandby = Math.max(this.settings.numberOfPregenLevelsInStandby, 0);
+        this.settings.numberOfPregenLevelsInStandby = Math.min(this.settings.numberOfPregenLevelsInStandby, this.settings.numberOfPregenLevels);
+        this.settings.timeBetweenStartsMs = Math.max(this.settings.timeBetweenStartsMs, 50);
+        this.settings.timeBetweenStartsMsInStandby = Math.max(this.settings.timeBetweenStartsMsInStandby, 50);
     }
 
     public void writeChanges() throws IOException {

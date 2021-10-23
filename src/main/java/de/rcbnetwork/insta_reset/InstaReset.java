@@ -142,6 +142,7 @@ public class InstaReset implements ClientModInitializer {
 
     public void openNextLevel() {
         this.config.settings.resetCounter++;
+        this.lastReset = new Date().getTime();
         // Add last level to pastLevelInfoQueue
         Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
@@ -179,7 +180,6 @@ public class InstaReset implements ClientModInitializer {
         }
         this.refillQueueScheduled();
         this.debugScreen.updateDebugMessage();
-        this.lastReset = new Date().getTime();
         this.openCurrentLevel();
     }
 

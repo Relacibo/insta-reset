@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class InstaResetDebugScreen {
-    private InstaReset instaReset;
+    private final InstaReset instaReset;
 
     private final AtomicReference<List<String>> debugMessage = new AtomicReference<>(Collections.emptyList());
     private final AtomicInteger debugMessageLineCount = new AtomicInteger(0);
