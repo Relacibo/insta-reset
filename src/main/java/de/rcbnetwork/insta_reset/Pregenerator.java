@@ -51,7 +51,7 @@ import java.util.UUID;
 public class Pregenerator {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(MinecraftClient client, int levelNumber, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
+    public static PregeneratingLevel pregenerate(String uuid, int levelNumber, MinecraftClient client,long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
         long creationTimeStamp = new Date().getTime();
         long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
         Path savesDirectory = client.getLevelStorage().getSavesDirectory();
@@ -142,7 +142,7 @@ public class Pregenerator {
         });
         // Fast-Reset: don't save when closing the server.
         ((FlushableServer) server).setShouldFlush(true);
-        return new PregeneratingLevel(seedHash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+        return new PregeneratingLevel(uuid, seedHash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
     private static String generateLevelName(int number) {
@@ -198,36 +198,24 @@ public class Pregenerator {
     }
 
     public static final class PregeneratingLevel {
-
+        public final String uuid;
         public final String hash;
-
         public final long creationTimeStamp;
-
         public final long expirationTimeStamp;
-
         public final String fileName;
-
         public final LevelInfo levelInfo;
-
         public final RegistryTracker.Modifiable registryTracker;
-
         public final GeneratorOptions generatorOptions;
-
         public final MinecraftClient.IntegratedResourceManager integratedResourceManager;
-
         public final LevelStorage.Session session;
-
         public final AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker;
-
         public final IntegratedServer server;
-
         public final Queue<Runnable> renderTaskQueue;
-
         public final MinecraftSessionService minecraftSessionService;
-
         public final UserCache userCache;
 
-        public PregeneratingLevel(String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, Queue<Runnable> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+        public PregeneratingLevel(String uuid, String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, Queue<Runnable> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+            this.uuid = uuid;
             this.hash = hash;
             this.creationTimeStamp = creationTimeStamp;
             this.expirationTimeStamp = expirationTimeStamp;
