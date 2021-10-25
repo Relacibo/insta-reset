@@ -61,23 +61,13 @@ public class InstaResetDebugScreen {
         String nextLevelString = this.instaReset.getCurrentLevel() != null ? createDebugStringFromLevelInfo(instaReset.getCurrentLevel()) : "-";
         String currentTimeStamp = Long.toHexString(now);
         String configString = String.format("%s;%s", createSettingsDebugString(), currentTimeStamp);
-        Map<Boolean, List<InstaReset.RunningLevelFuture>> runningLevelFuturesPartitioned =
-                instaReset.getRunningLevelFutureQueueStream()
-                .collect(instaReset.PARTITION_BY_RUNNING_STATE);
-        Stream<String> levelStrings = runningLevelFuturesPartitioned.get(true).stream().map(f -> {
-            try {
-                return f.future.get();
-            } catch (Exception ignored) {}
-            return null;
-        }).filter(Objects::nonNull).map(this::createDebugStringFromLevelInfo);
-        Stream<String> futureStrings = runningLevelFuturesPartitioned.get(false).stream().map(this::createDebugStringFromLevelFuture);
+        Stream<String> levelStrings = instaReset.getRunningLevelQueueStream().map(this::createDebugStringFromLevelFuture);
         Stream<String> pastStrings = instaReset.getPastLevelInfoQueueStream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s", s));
         List<String> message = Stream.of(
                 Stream.of(configString),
                 pastStrings,
                 Stream.of(nextLevelString),
-                levelStrings,
-                futureStrings
+                levelStrings
         ).flatMap(stream -> stream).collect(Collectors.toList());
         this.setDebugMessage(message);
     }
@@ -91,7 +81,11 @@ public class InstaResetDebugScreen {
     }
 
     private String createDebugStringFromLevelFuture(InstaReset.RunningLevelFuture future) {
-        return Long.toHexString(future.expectedCreationTimeStamp);
+        try {
+            return future.future.isDone() ? createDebugStringFromLevelInfo(future.future.get()) : Long.toHexString(future.expectedCreationTimeStamp);
+        } catch (Exception e) {
+            return "Could not print!";
+        }
     }
 
     private String createSettingsDebugString() {

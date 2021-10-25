@@ -40,7 +40,6 @@ public class InstaReset implements ClientModInitializer {
     private long lastWorldCreation = 0;
     private long lastReset = 0;
     private AtomicInteger resetCounterTemp;
-    public final Collector<RunningLevelFuture, ?, Map<Boolean, List<RunningLevelFuture>>> PARTITION_BY_RUNNING_STATE = Collectors.partitioningBy(f -> this.isLevelRunning(f.uuid));
 
     public Pregenerator.RunningLevel getCurrentLevel() {
         return this.currentLevel.get();
@@ -54,7 +53,7 @@ public class InstaReset implements ClientModInitializer {
         return queuedRunningLevelUUIDs.contains(uuid);
     }
 
-    public Stream<RunningLevelFuture> getRunningLevelFutureQueueStream() {
+    public Stream<RunningLevelFuture> getRunningLevelQueueStream() {
         return runningLevelQueue.stream();
     }
 
