@@ -6,9 +6,8 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.text.LiteralText;
 
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -62,9 +61,16 @@ public class InstaResetDebugScreen {
         String nextLevelString = this.instaReset.getCurrentLevel() != null ? createDebugStringFromLevelInfo(instaReset.getCurrentLevel()) : "-";
         String currentTimeStamp = Long.toHexString(now);
         String configString = String.format("%s;%s", createSettingsDebugString(), currentTimeStamp);
-
-        Stream<String> futureStrings = instaReset.getPregeneratingLevelFutureQueueStream().map(this::createDebugStringFromLevelFuture);
-        Stream<String> levelStrings = instaReset.getPregeneratingLevelQueueStream().map(this::createDebugStringFromLevelInfo);
+        Map<Boolean, List<InstaReset.RunningLevelFuture>> runningLevelFuturesPartitioned =
+                instaReset.getRunningLevelFutureQueueStream()
+                .collect(instaReset.PARTITION_BY_RUNNING_STATE);
+        Stream<String> levelStrings = runningLevelFuturesPartitioned.get(true).stream().map(f -> {
+            try {
+                return f.future.get();
+            } catch (Exception ignored) {}
+            return null;
+        }).filter(Objects::nonNull).map(this::createDebugStringFromLevelInfo);
+        Stream<String> futureStrings = runningLevelFuturesPartitioned.get(false).stream().map(this::createDebugStringFromLevelFuture);
         Stream<String> pastStrings = instaReset.getPastLevelInfoQueueStream().map(this::createDebugStringFromPastLevel).map((s) -> String.format("%s", s));
         List<String> message = Stream.of(
                 Stream.of(configString),
@@ -80,11 +86,11 @@ public class InstaResetDebugScreen {
         return String.format("%s:%s", info.hash.substring(0, 10), Long.toHexString(info.creationTimeStamp));
     }
 
-    private String createDebugStringFromLevelInfo(Pregenerator.PregeneratingLevel level) {
+    private String createDebugStringFromLevelInfo(Pregenerator.RunningLevel level) {
         return String.format("%s:%s", level.hash.substring(0, 10), Long.toHexString(level.creationTimeStamp));
     }
 
-    private String createDebugStringFromLevelFuture(InstaReset.PregeneratingLevelFuture future) {
+    private String createDebugStringFromLevelFuture(InstaReset.RunningLevelFuture future) {
         return Long.toHexString(future.expectedCreationTimeStamp);
     }
 

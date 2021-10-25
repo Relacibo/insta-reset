@@ -51,7 +51,7 @@ import java.util.UUID;
 public class Pregenerator {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    public static PregeneratingLevel pregenerate(String uuid, int levelNumber, MinecraftClient client,long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
+    public static RunningLevel pregenerate(String uuid, int levelNumber, MinecraftClient client, long expireAfterSeconds, Difficulty difficulty) throws IOException, ExecutionException, InterruptedException {
         long creationTimeStamp = new Date().getTime();
         long expirationTimeStamp = expireAfterSeconds != -1 ? creationTimeStamp + expireAfterSeconds * 1000L : 0;
         Path savesDirectory = client.getLevelStorage().getSavesDirectory();
@@ -142,7 +142,7 @@ public class Pregenerator {
         });
         // Fast-Reset: don't save when closing the server.
         ((FlushableServer) server).setShouldFlush(true);
-        return new PregeneratingLevel(uuid, seedHash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
+        return new RunningLevel(uuid, seedHash, creationTimeStamp, expirationTimeStamp, fileName, levelInfo, registryTracker, generatorOptions, integratedResourceManager2, session2, worldGenerationProgressTracker, server, renderTaskQueue, minecraftSessionService, userCache);
     }
 
     private static String generateLevelName(int number) {
@@ -164,7 +164,16 @@ public class Pregenerator {
         return fileName;
     }
 
-    public static void uninitialize(MinecraftClient client, PregeneratingLevel level) throws IOException {
+    public static void foregroundLevel(MinecraftClient client, RunningLevel level) {
+        String fileName = level.fileName;
+        LevelInfo levelInfo = level.levelInfo;
+        GeneratorOptions generatorOptions = level.generatorOptions;
+        RegistryTracker.Modifiable registryTracker = level.registryTracker;
+        // CreateWorldScreen.java:258
+        client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
+    }
+
+    public static void uninitialize(MinecraftClient client, RunningLevel level) throws IOException {
         level.server.stop(true);
         // WorldListWidget.java:323
         LevelStorage levelStorage = client.getLevelStorage();
@@ -197,7 +206,7 @@ public class Pregenerator {
         }
     }
 
-    public static final class PregeneratingLevel {
+    public static final class RunningLevel {
         public final String uuid;
         public final String hash;
         public final long creationTimeStamp;
@@ -214,7 +223,7 @@ public class Pregenerator {
         public final MinecraftSessionService minecraftSessionService;
         public final UserCache userCache;
 
-        public PregeneratingLevel(String uuid, String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, Queue<Runnable> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
+        public RunningLevel(String uuid, String hash, long creationTimeStamp, long expirationTimeStamp, String fileName, LevelInfo levelInfo, RegistryTracker.Modifiable registryTracker, GeneratorOptions generatorOptions, MinecraftClient.IntegratedResourceManager integratedResourceManager, LevelStorage.Session session, AtomicReference<WorldGenerationProgressTracker> worldGenerationProgressTracker, IntegratedServer server, Queue<Runnable> renderTaskQueue, MinecraftSessionService minecraftSessionService, UserCache userCache) {
             this.uuid = uuid;
             this.hash = hash;
             this.creationTimeStamp = creationTimeStamp;

@@ -121,7 +121,7 @@ public class MinecraftClientMixin {
             return;
         }
         // MinecraftClient.java:1659
-        Pregenerator.PregeneratingLevel currentLevel = InstaReset.instance().getCurrentLevel();
+        Pregenerator.RunningLevel currentLevel = InstaReset.instance().getCurrentLevel();
         LevelStorage.Session session2 = currentLevel.session;
         MinecraftClient.IntegratedResourceManager integratedResourceManager2 = currentLevel.integratedResourceManager;
 

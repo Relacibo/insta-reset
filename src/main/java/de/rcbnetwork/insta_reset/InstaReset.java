@@ -4,15 +4,14 @@ import com.google.common.collect.Queues;
 import de.rcbnetwork.insta_reset.interfaces.FlushableServer;
 import net.fabricmc.api.ClientModInitializer;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.util.registry.RegistryTracker;
-import net.minecraft.world.gen.*;
-import net.minecraft.world.level.LevelInfo;
 
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.Level;
@@ -33,15 +32,17 @@ public class InstaReset implements ClientModInitializer {
     private Config config;
     private MinecraftClient client;
     private final ScheduledExecutorService service = Executors.newScheduledThreadPool(0);
-    private final Queue<PregeneratingLevelExpireFuture> pregeneratingLevelExpireFutureQueue = Queues.newConcurrentLinkedQueue();
-    private final Queue<PregeneratingLevelFuture> pregeneratingLevelFutureQueue = Queues.newConcurrentLinkedQueue();
-    private final AtomicReference<Pregenerator.PregeneratingLevel> currentLevel = new AtomicReference<>();
+    private final Queue<RunningLevelExpireFuture> runningLevelExpirationQueue = Queues.newConcurrentLinkedQueue();
+    private final Queue<RunningLevelFuture> runningLevelQueue = Queues.newConcurrentLinkedQueue();
+    private final Set<String> queuedRunningLevelUUIDs = ConcurrentHashMap.newKeySet();
+    private final AtomicReference<Pregenerator.RunningLevel> currentLevel = new AtomicReference<>();
     private long lastScheduledWorldCreation = 0;
     private long lastWorldCreation = 0;
     private long lastReset = 0;
     private AtomicInteger resetCounterTemp;
+    public final Collector<RunningLevelFuture, ?, Map<Boolean, List<RunningLevelFuture>>> PARTITION_BY_RUNNING_STATE = Collectors.partitioningBy(f -> this.isLevelRunning(f.uuid));
 
-    public Pregenerator.PregeneratingLevel getCurrentLevel() {
+    public Pregenerator.RunningLevel getCurrentLevel() {
         return this.currentLevel.get();
     }
 
@@ -49,12 +50,12 @@ public class InstaReset implements ClientModInitializer {
         return config.settings;
     }
 
-    public Stream<Pregenerator.PregeneratingLevel> getPregeneratingLevelQueueStream() {
-        return pregeneratingLevelQueue.stream();
+    public boolean isLevelRunning(String uuid) {
+        return queuedRunningLevelUUIDs.contains(uuid);
     }
 
-    public Stream<PregeneratingLevelFuture> getPregeneratingLevelFutureQueueStream() {
-        return pregeneratingLevelFutureQueue.stream();
+    public Stream<RunningLevelFuture> getRunningLevelFutureQueueStream() {
+        return runningLevelQueue.stream();
     }
 
     public Stream<PastLevelInfo> getPastLevelInfoQueueStream() {
@@ -82,7 +83,7 @@ public class InstaReset implements ClientModInitializer {
     }
 
     public void setCurrentServerShouldFlush(boolean shouldFlush) {
-        Pregenerator.PregeneratingLevel level = this.currentLevel.get();
+        Pregenerator.RunningLevel level = this.currentLevel.get();
         if (level == null) {
             return;
         }
@@ -102,33 +103,34 @@ public class InstaReset implements ClientModInitializer {
         log("Starting!");
         this.setState(InstaResetState.RUNNING);
         resetCounterTemp = new AtomicInteger(config.settings.resetCounter);
+        this.lastReset = 0;
+        this.lastScheduledWorldCreation = 0;
+        this.lastWorldCreation = 0;
         openNextLevel();
     }
 
     public void stop() {
         log("Stopping!");
         this.setState(InstaResetState.STOPPING);
-        // Cancel schedule for expire tasks
-        PregeneratingLevelExpireFuture expireFuture = pregeneratingLevelExpireFutureQueue.poll();
-        while (expireFuture != null) {
-            expireFuture.future.cancel(false);
-            expireFuture = pregeneratingLevelExpireFutureQueue.poll();
-        }
-        // Try cancel schedule for future levels
-        PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
+        // Try cancel schedule for future levels, stop running levels and remove scheduled expireTasks.
+        RunningLevelFuture future = runningLevelQueue.poll();
         while (future != null) {
-            // TODO: get if already executed or executing
-            future.future.cancel(false);
-            future = pregeneratingLevelFutureQueue.poll();
+            String uuid = future.uuid;
+            if (queuedRunningLevelUUIDs.contains(uuid)) {
+                removeScheduledExpiration(uuid);
+                try {
+                    uninitializeLevelAsync(future.future.get());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                future.future.cancel(true);
+            }
+            future = runningLevelQueue.poll();
         }
-        // Unload current loaded levels
-        Pregenerator.PregeneratingLevel level = pregeneratingLevelQueue.poll();
-        while (level != null) {
-            uninitializeLevelAsync(level);
-            level = pregeneratingLevelQueue.poll();
-        }
+        queuedRunningLevelUUIDs.clear();
         // Add last level to pastLevelInfoQueue, if it is not already in it
-        level = currentLevel.get();
+        Pregenerator.RunningLevel level = currentLevel.get();
         if (level != null && (this.config.pastLevelInfoQueue.isEmpty() || !level.hash.equals(this.config.pastLevelInfoQueue.peek().hash))) {
             config.pastLevelInfoQueue.offer(new PastLevelInfo(level.hash, level.creationTimeStamp));
             if (this.config.pastLevelInfoQueue.size() > 5) {
@@ -148,7 +150,7 @@ public class InstaReset implements ClientModInitializer {
         long now = new Date().getTime();
         boolean wasInStandbyMode = isInStandbyMode(now);
         // Add last level to pastLevelInfoQueue
-        Pregenerator.PregeneratingLevel pastLevel = this.currentLevel.get();
+        Pregenerator.RunningLevel pastLevel = this.currentLevel.get();
         if (pastLevel != null) {
             this.config.pastLevelInfoQueue.offer(new PastLevelInfo(pastLevel.hash, pastLevel.creationTimeStamp));
             if (this.config.pastLevelInfoQueue.size() > 5) {
@@ -160,21 +162,17 @@ public class InstaReset implements ClientModInitializer {
         // If the mod was in standby mode then the scheduled world creations will be too far apart from each other.
         // So reschedule with small increments.
         if (wasInStandbyMode) {
-            rescheduleWorldCreation();
+            rescheduleLevelCreations();
         }
-        PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
-        Pregenerator.PregeneratingLevel next;
+        RunningLevelFuture future = runningLevelQueue.poll();
+        Pregenerator.RunningLevel next;
         if (future == null) {
             next = createLevel(createUUID(), this.config.settings.resetCounter);
+            lastScheduledWorldCreation = Math.max(this.lastScheduledWorldCreation, this.lastReset);
         } else {
             String uuid = future.uuid;
-            // Prevent scheduled expire task from executing
-            pregeneratingLevelExpireFutureQueue.stream()
-                    .filter(f -> f.uuid.equals(uuid))
-                    .forEach(f -> {
-                        f.future.cancel(true);
-                        pregeneratingLevelExpireFutureQueue.remove(f);
-                    });
+            queuedRunningLevelUUIDs.remove(uuid);
+            removeScheduledExpiration(uuid);
             try {
                 next = future.future.get();
             } catch (Exception e) {
@@ -184,6 +182,7 @@ public class InstaReset implements ClientModInitializer {
                 return;
             }
         }
+        assert next != null;
         this.currentLevel.set(next);
         try {
             config.writeChanges();
@@ -192,10 +191,11 @@ public class InstaReset implements ClientModInitializer {
         }
         this.refillQueueScheduled();
         this.debugScreen.updateDebugMessage();
-        this.openCurrentLevel();
+        log(String.format("Opening level: %s - %s", this.config.settings.resetCounter, next.hash));
+        Pregenerator.foregroundLevel(client, next);
     }
 
-    private void uninitializeLevelAsync(Pregenerator.PregeneratingLevel level) {
+    private void uninitializeLevelAsync(Pregenerator.RunningLevel level) {
         Thread thread = new Thread(() -> {
             try {
                 log(String.format("Removing Level: %s", level.hash));
@@ -216,45 +216,47 @@ public class InstaReset implements ClientModInitializer {
         int timeBetweenStarts = standByMode ?
                 config.settings.timeBetweenStartsMsStandby :
                 config.settings.timeBetweenStartsMs;
-        // make the delay timeBetweenStartsMs from last creation or if this is negative 0
+        // make the delay timeBetweenStartsMs from last creation or if that's negative 0
         long baseDelay = lastScheduledWorldCreation - now + timeBetweenStarts;
         baseDelay = Math.max(0, baseDelay);
-        int numToCreate = maxLevels - pregeneratingLevelFutureQueue.size();
+        int numToCreate = maxLevels - runningLevelQueue.size();
         for (int i = 0; i < numToCreate; i++) {
             // Schedule all creations at least timeBetweenStartsMs apart from each other
             long delayInMs = baseDelay + (long) i * timeBetweenStarts;
             this.lastScheduledWorldCreation = now + delayInMs;
             final String uuid = createUUID();
-            ScheduledFuture<Pregenerator.PregeneratingLevel> scheduledFuture = scheduleLevelCreation(uuid, delayInMs);
-            PregeneratingLevelFuture future = new PregeneratingLevelFuture(uuid, this.lastScheduledWorldCreation, scheduledFuture);
-            this.pregeneratingLevelFutureQueue.offer(future);
+            ScheduledFuture<Pregenerator.RunningLevel> scheduledFuture = scheduleLevelCreation(uuid, delayInMs);
+            this.runningLevelQueue.offer(new RunningLevelFuture(uuid, this.lastScheduledWorldCreation, scheduledFuture));
             log(String.format("Scheduled level with uuid %s for %s", uuid, this.lastScheduledWorldCreation));
         }
     }
 
-    private ScheduledFuture<Pregenerator.PregeneratingLevel> scheduleLevelCreation(String uuid, long delayInMs) {
+    private ScheduledFuture<Pregenerator.RunningLevel> scheduleLevelCreation(String uuid, long delayInMs) {
         return service.schedule(() -> {
+            queuedRunningLevelUUIDs.add(uuid);
             int levelNumber = resetCounterTemp.incrementAndGet();
             // Will be executed after it was inserted in the main thread
-            Pregenerator.PregeneratingLevel level = createLevel(uuid, levelNumber);
+            Pregenerator.RunningLevel level = createLevel(uuid, levelNumber);
             log(String.format("Started Server: %s", level.hash));
             // Schedule the expiration of this level
             if (config.settings.expireAfterSeconds != -1) {
                 ScheduledFuture<?> expf = scheduleLevelExpiration(level, level.expirationTimeStamp - new Date().getTime());
-                this.pregeneratingLevelExpireFutureQueue.offer(new PregeneratingLevelExpireFuture(uuid, expf));
+                this.runningLevelExpirationQueue.offer(new RunningLevelExpireFuture(uuid, expf));
             }
-            debugScreen.updateDebugMessage();
+            // We have to schedule the debug message update, because level isn't yet returned, so we cannot just run it.
+            service.schedule((Runnable) this.debugScreen::updateDebugMessage, 50, TimeUnit.MILLISECONDS);
             return level;
         }, delayInMs, TimeUnit.MILLISECONDS);
     }
 
-    private ScheduledFuture<?> scheduleLevelExpiration(Pregenerator.PregeneratingLevel level, long delayInMs) {
+    private ScheduledFuture<?> scheduleLevelExpiration(Pregenerator.RunningLevel level, long delayInMs) {
         return service.schedule(() -> {
             String uuid = level.uuid;
+            boolean wasInQueue = queuedRunningLevelUUIDs.remove(uuid);
             // Remove self from queue
-            this.pregeneratingLevelExpireFutureQueue.removeIf(f -> f.uuid.equals(uuid));
-            boolean removed = this.pregeneratingLevelFutureQueue.removeIf( f -> f.uuid.equals(uuid));
-            if (!removed) {
+            this.runningLevelExpirationQueue.removeIf(f -> f.uuid.equals(uuid));
+            boolean removedFromLevelQueue = this.runningLevelQueue.removeIf(f -> f.uuid.equals(uuid));
+            if (!(wasInQueue && removedFromLevelQueue)) {
                 return;
             }
             resetCounterTemp.decrementAndGet();
@@ -269,23 +271,27 @@ public class InstaReset implements ClientModInitializer {
         }, delayInMs, TimeUnit.MILLISECONDS);
     }
 
-    private void rescheduleWorldCreation() {
-        PregeneratingLevelFuture future = pregeneratingLevelFutureQueue.poll();
-        while (future != null) {
-            if (!future.future.isDone()) {
-                // Only cancel creation task, expiration task isn't scheduled yet.
-                future.future.cancel(false);
-            }
-            future = pregeneratingLevelFutureQueue.poll();
-        }
+    private void removeScheduledExpiration(String uuid) {
+        runningLevelExpirationQueue.stream()
+                .filter(f -> f.uuid.equals(uuid))
+                .forEach(f -> f.future.cancel(false));
+        runningLevelExpirationQueue.removeIf(f -> f.uuid.equals(uuid));
+    }
+
+    private void rescheduleLevelCreations() {
+        runningLevelQueue.stream().filter(f -> !this.isLevelRunning(f.uuid)).forEach(f -> {
+            // Only cancel creation task, expiration task isn't scheduled yet.
+            f.future.cancel(false);
+            runningLevelQueue.remove(f);
+        });
         this.lastScheduledWorldCreation = this.lastWorldCreation;
         refillQueueScheduled();
         debugScreen.updateDebugMessage();
     }
 
-    private Pregenerator.PregeneratingLevel createLevel(String uuid, int levelNumber) {
+    private Pregenerator.RunningLevel createLevel(String uuid, int levelNumber) {
         try {
-            Pregenerator.PregeneratingLevel level = Pregenerator.pregenerate(uuid, levelNumber, client, config.settings.expireAfterSeconds, config.settings.difficulty);
+            Pregenerator.RunningLevel level = Pregenerator.pregenerate(uuid, levelNumber, client, config.settings.expireAfterSeconds, config.settings.difficulty);
             this.lastWorldCreation = level.creationTimeStamp;
             return level;
         } catch (Exception e) {
@@ -299,19 +305,8 @@ public class InstaReset implements ClientModInitializer {
         return UUID.randomUUID().toString();
     }
 
-    public void openCurrentLevel() {
-        Pregenerator.PregeneratingLevel level = currentLevel.get();
-        log(String.format("Opening level: %s - %s", this.config.settings.resetCounter, level.hash));
-        String fileName = level.fileName;
-        LevelInfo levelInfo = level.levelInfo;
-        GeneratorOptions generatorOptions = level.generatorOptions;
-        RegistryTracker.Modifiable registryTracker = level.registryTracker;
-        // CreateWorldScreen.java:258
-        this.client.method_29607(fileName, levelInfo, registryTracker, generatorOptions);
-    }
-
     private boolean isInStandbyMode(long now) {
-        return now > this.lastReset + config.settings.expireAfterSeconds * 1000L;
+        return this.lastReset != 0 && now > this.lastReset + config.settings.expireAfterSeconds * 1000L;
     }
 
     public static void log(String message) {
@@ -322,12 +317,12 @@ public class InstaReset implements ClientModInitializer {
         logger.log(level, "[" + MOD_NAME + "] " + message);
     }
 
-    public static final class PregeneratingLevelFuture {
-        private final String uuid;
+    public static final class RunningLevelFuture {
+        public final String uuid;
         public final long expectedCreationTimeStamp;
-        public final ScheduledFuture<Pregenerator.PregeneratingLevel> future;
+        public final ScheduledFuture<Pregenerator.RunningLevel> future;
 
-        public PregeneratingLevelFuture(String uuid, long expectedCreationTimeStamp, ScheduledFuture<Pregenerator.PregeneratingLevel> future) {
+        public RunningLevelFuture(String uuid, long expectedCreationTimeStamp, ScheduledFuture<Pregenerator.RunningLevel> future) {
             this.uuid = uuid;
             this.expectedCreationTimeStamp = expectedCreationTimeStamp;
             this.future = future;
@@ -344,11 +339,11 @@ public class InstaReset implements ClientModInitializer {
         }
     }
 
-    public static final class PregeneratingLevelExpireFuture {
+    public static final class RunningLevelExpireFuture {
         public final String uuid;
         public final ScheduledFuture<?> future;
 
-        public PregeneratingLevelExpireFuture(String uuid, ScheduledFuture<?> future) {
+        public RunningLevelExpireFuture(String uuid, ScheduledFuture<?> future) {
             this.uuid = uuid;
             this.future = future;
         }
