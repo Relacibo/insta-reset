@@ -167,7 +167,8 @@ public class InstaReset implements ClientModInitializer {
         Pregenerator.RunningLevel next;
         if (future == null) {
             next = createLevel(createUUID(), this.config.settings.resetCounter);
-            lastScheduledWorldCreation = Math.max(this.lastScheduledWorldCreation, this.lastReset);
+            assert this.lastReset > this.lastScheduledWorldCreation;
+            lastScheduledWorldCreation = this.lastReset;
         } else {
             String uuid = future.uuid;
             queuedRunningLevelUUIDs.remove(uuid);
