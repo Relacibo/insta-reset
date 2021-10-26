@@ -49,8 +49,12 @@ public class MinecraftServerMixin implements FlushableServer {
         if (!this.shouldFlush()) {
             return iterator.hasNext();
         }
+        ServerWorld serverWorld2;
         while (iterator.hasNext()) {
-            iterator.next().savingDisabled = true;
+            serverWorld2 = (ServerWorld)iterator.next();
+            if (serverWorld2 != null) {
+                serverWorld2.savingDisabled = true;
+            }
         }
         return false;
     }
