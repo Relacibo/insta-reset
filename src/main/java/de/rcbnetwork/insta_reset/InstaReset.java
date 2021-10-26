@@ -170,9 +170,6 @@ public class InstaReset implements ClientModInitializer {
             assert this.lastReset > this.lastScheduledWorldCreation;
             lastScheduledWorldCreation = this.lastReset;
         } else {
-            String uuid = future.uuid;
-            queuedRunningLevelUUIDs.remove(uuid);
-            removeScheduledExpiration(uuid);
             try {
                 next = future.future.get();
             } catch (Exception e) {
@@ -181,6 +178,9 @@ public class InstaReset implements ClientModInitializer {
                 this.stop();
                 return;
             }
+            String uuid = future.uuid;
+            queuedRunningLevelUUIDs.remove(uuid);
+            removeScheduledExpiration(uuid);
         }
         assert next != null;
         this.currentLevel.set(next);
